@@ -1,0 +1,7 @@
+{
+  "name": "QUINN..",
+  "description": "Your TQL - AI Agent built by Mortgage GURU\u0027s",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
