@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { GenerativeUIData } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { Mail, TrendingUp, Trophy, User, DollarSign, Briefcase, Paperclip, Send, Plus, X, Check, Save, Lightbulb, MapPin, Home, School, Coffee, Info, FileText, Share2, ShieldCheck, Zap, CheckCircle2, AlertCircle, ChevronRight } from 'lucide-react';
+import { Mail, TrendingUp, Trophy, User, DollarSign, Briefcase, Paperclip, Send, Plus, X, Check, Save, Lightbulb, MapPin, Home, School, Coffee, Info, FileText, Share2, ShieldCheck, Zap, CheckCircle2, AlertCircle, ChevronRight, Calculator, ExternalLink } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface GenerativeUIProps {
   ui: GenerativeUIData;
+  onOpenPricing?: () => void;
 }
 
 const COLORS = ['#0A2540', '#3B82F6', '#10B981', '#F59E0B', '#6366F1'];
@@ -27,7 +28,7 @@ const CustomTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-export function GenerativeUI({ ui }: GenerativeUIProps) {
+export function GenerativeUI({ ui, onOpenPricing }: GenerativeUIProps) {
   switch (ui.type) {
     case 'chart':
       return <ChartUI data={ui.data} />;
@@ -47,16 +48,96 @@ export function GenerativeUI({ ui }: GenerativeUIProps) {
       return <ImageUI data={ui.data} />;
     case 'document':
       return <DocumentAnalysisUI data={ui.data} />;
+    case 'pricing':
+      return <PricingUI data={ui.data} onOpenPricing={onOpenPricing} />;
     default:
       return null;
   }
+}
+
+function PricingUI({ data, onOpenPricing }: { data: any; onOpenPricing?: () => void }) {
+  return (
+    <div className="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-2xl border border-slate-100 mt-6 w-full max-w-3xl overflow-hidden font-sans animate-in zoom-in duration-700 text-left relative group">
+      {/* Decorative Background Element */}
+      <div className="absolute -top-24 -right-24 w-64 h-64 bg-navy-50 rounded-full opacity-20 blur-3xl group-hover:bg-navy-100 transition-colors duration-700" />
+      
+      <div className="relative z-10">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+          <div className="flex items-center gap-5">
+            <div className="bg-navy-900 p-4 rounded-[1.25rem] text-white shadow-2xl shadow-navy-200 ring-8 ring-navy-50/50">
+              <Calculator size={32} strokeWidth={1.5} />
+            </div>
+            <div>
+              <h3 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">TotalPricer Engine</h3>
+              <div className="flex items-center gap-2 mt-1.5">
+                <div className="flex gap-0.5">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                </div>
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Real-time Rates Active</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="hidden md:block text-right">
+            <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Version</p>
+            <p className="text-xs font-bold text-slate-400">TQL.REL_2024.04</p>
+          </div>
+        </div>
+        
+        <div className="mb-10">
+          <p className="text-slate-600 text-lg md:text-xl leading-relaxed font-medium max-w-2xl">
+            {data?.message || "Our proprietary pricing engine allows you to run complex loan scenarios, compare secondary market executions, and lock rates instantly."}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+          {[
+            { label: 'Access', value: 'Instant & Direct', icon: Zap },
+            { label: 'Calculations', value: 'Market-Ready', icon: ShieldCheck },
+            { label: 'Status', value: 'Production', icon: CheckCircle2 }
+          ].map((item, i) => (
+            <div key={i} className="bg-slate-50/80 backdrop-blur-sm p-4 rounded-2xl border border-slate-100 hover:border-navy-100 transition-colors group/item">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                <item.icon size={10} className="text-navy-300" />
+                {item.label}
+              </p>
+              <p className="text-xs font-bold text-slate-900">{item.value}</p>
+            </div>
+          ))}
+        </div>
+
+        <button 
+          onClick={onOpenPricing}
+          className="w-full py-6 px-10 bg-navy-900 hover:bg-navy-800 text-white rounded-2xl font-bold text-xl transition-all shadow-[0_25px_50px_-12px_rgba(10,37,64,0.35)] hover:shadow-[0_30px_60px_-12px_rgba(10,37,64,0.45)] hover:-translate-y-1.5 flex items-center justify-center gap-4 group active:scale-[0.97] border border-white/10"
+        >
+          <span>Launch Pricing Interface</span>
+          <ExternalLink size={24} strokeWidth={2.5} className="group-hover:translate-x-1.5 group-hover:-translate-y-1.5 transition-transform duration-300" />
+        </button>
+
+        <div className="mt-10 pt-8 border-t border-slate-100 flex flex-wrap items-center justify-center gap-x-12 gap-y-4">
+          <div className="flex items-center gap-2.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+            <div className="w-1.5 h-1.5 rounded-full bg-navy-100" />
+            Secure Session
+          </div>
+          <div className="flex items-center gap-2.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+            <div className="w-1.5 h-1.5 rounded-full bg-navy-100" />
+            Compliance Verified
+          </div>
+          <div className="flex items-center gap-2.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+            <div className="w-1.5 h-1.5 rounded-full bg-navy-100" />
+            Cloud Native
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function DocumentAnalysisUI({ data }: { data: any }) {
   const { fileName, summary, keyPoints, insights, documentType, confidenceScore = 98 } = data;
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 mt-4 w-full max-w-2xl overflow-hidden font-sans">
+    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 mt-4 w-full max-w-4xl overflow-hidden font-sans">
       <div className="bg-navy-900 p-6 text-white flex justify-between items-center">
         <div className="flex items-center gap-4">
           <div className="bg-white/10 p-3 rounded-xl backdrop-blur-sm">
@@ -144,7 +225,7 @@ function DocumentAnalysisUI({ data }: { data: any }) {
 function ImageUI({ data }: { data: any }) {
   const { url, title, prompt } = data;
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 mt-4 w-full max-w-lg overflow-hidden font-sans group">
+    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 mt-4 w-full max-w-3xl overflow-hidden font-sans group">
       <div className="relative aspect-square md:aspect-video overflow-hidden bg-slate-100">
         <img 
           src={url} 
@@ -178,7 +259,7 @@ function QuoteBuilderUI({ data }: { data: any }) {
   const { clientName, propertyAddress, estimatedValue, loanAmount, interestRate, monthlyPayment, marketData } = data;
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 mt-4 w-full max-w-lg overflow-hidden font-sans">
+    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 mt-4 w-full max-w-3xl overflow-hidden font-sans text-left">
       {/* Header */}
       <div className="bg-navy-900 p-6 text-white">
         <div className="flex justify-between items-start mb-4">
@@ -300,7 +381,7 @@ function QuoteBuilderUI({ data }: { data: any }) {
 function FreshIdeasUI({ data }: { data: any }) {
   const { title, ideas } = data;
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mt-4 w-full max-w-md">
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mt-4 w-full max-w-3xl text-left">
       <div className="flex items-center gap-2 mb-6">
         <div className="bg-amber-100 p-2 rounded-lg">
           <Lightbulb size={20} className="text-amber-600" />
@@ -333,7 +414,7 @@ function ChartUI({ data }: { data: any }) {
   const isLTV = title.toLowerCase().includes('ltv');
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 mt-4 w-full max-w-lg overflow-hidden font-sans animate-in slide-in-from-bottom-4 duration-500">
+    <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 mt-4 w-full max-w-3xl overflow-hidden font-sans animate-in slide-in-from-bottom-4 duration-500">
       <div className="flex justify-between items-start mb-8">
         <div>
           <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight">{title}</h3>
@@ -451,7 +532,7 @@ function ChartUI({ data }: { data: any }) {
 function CardUI({ data }: { data: any }) {
   const { title, description, metrics } = data;
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 mt-4 w-full max-w-sm overflow-hidden font-sans animate-in zoom-in duration-500">
+    <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 mt-4 w-full max-w-2xl overflow-hidden font-sans animate-in zoom-in duration-500 text-left">
       <div className="flex items-center gap-3 mb-4">
         <div className="bg-navy-50 p-2 rounded-lg">
           <Info size={18} className="text-navy-600" />
@@ -509,7 +590,7 @@ function DealUI({ data }: { data: any }) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 mt-4 w-full max-w-md overflow-hidden font-sans relative">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 mt-4 w-full max-w-3xl overflow-hidden font-sans relative text-left">
       <div className="bg-[#0A2540] p-5 text-white flex justify-between items-center">
         <div>
           <p className="text-slate-300 text-xs font-semibold uppercase tracking-wider mb-1">Pipeline</p>
@@ -697,7 +778,7 @@ function EmailUI({ data }: { data: any }) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-md border border-slate-200 mt-4 w-full max-w-lg overflow-hidden font-sans relative">
+    <div className="bg-white rounded-xl shadow-md border border-slate-200 mt-4 w-full max-w-3xl overflow-hidden font-sans relative text-left">
       {/* TQL Brand Header */}
       <div className="bg-[#0A2540] px-5 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-white">

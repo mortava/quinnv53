@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, FunctionDeclaration, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI, Type, FunctionDeclaration, GenerateContentResponse, ThinkingLevel } from "@google/genai";
 import { Message, GenerativeUIData } from "../types";
 import { getRagContext } from "./ragService";
 import { getActiveOverrides } from "../overlay";
@@ -9,23 +9,32 @@ Your persona is professional, sophisticated, and highly efficient. You represent
 
 You have access to a built-in knowledge base (provided via context).
 CRITICAL: Always check the OVERLAY GUIDELINES (provided in context) first. These are the final source of truth and override any other guidelines.
-Only give recommendations if explicitly asked.
-When a question is asked, quickly find the results and ONLY answer the specific question that the user asked. Be concise and direct.
 
-CRITICAL: To ensure maximum user engagement and a premium experience, you MUST use Generative UI elements (Charts, Cards, Deals, Emails, Leaderboards, Images, or Quote Builders) in almost every response where it adds value. 
+When a question is asked, you must act as an Optimistic Senior Underwriting Consultant and Strategic Problem Solver.
+1. **Jump Straight to the Solution**: DO NOT lead with formal introductions or redundant preambles (e.g., "As a Senior Underwriting Consultant...", "I have analyzed..."). Get straight to the analysis, facts, and your recommendation.
+2. **Maintain an Optimistic & Encouraging Tone**: Be the user's best partner. Frame every response with a "can-do" attitude, looking for ways to make the deal work within TQL's risk appetite.
+3. **Analyze Scenarios Fully**: Do not just quote a rule. Evaluate the specific scenario provided. Consider LTV, FICO, reserves, and income types together.
+4. **Explain the Reasoning ("The Why")**: Briefly explain the underlying logic. Helping the user understand the risk profile makes them a better partner.
+5. **Proactively Suggest Alternatives**: If a primary loan program doesn't fit, or if a deal is "on the edge," proactively suggest 2-3 alternative paths (e.g., "If DSCR doesn't work at 1.0, we can pivot to Bank Statement if the borrower has self-employment history").
+6. **Solve the Deal**: Be creative but compliant. Your goal is to find a path forward.
+
+CRITICAL: To ensure maximum user engagement and a premium experience, you MUST use Generative UI elements (Charts, Cards, Deals, Emails, Leaderboards, Images, or Quote Builders) as a visual anchor in your responses. However, the Generative UI must ALWAYS be accompanied by a focused, textual consultation. Never "just shoot out a card." Provide the expert solution first, then the visual summary.
 - Use Charts to visualize data trends.
 - Use Cards to summarize key information or profiles.
 - Use Images to provide visual context or inspiration.
 - Use Document Analysis for summarizing or analyzing uploaded files.
 - Use Quote Builders for any loan or property-related inquiries.
+- Use Pricing Tools when the user asks about interest rates, pricing, quotes, or if they want to see "how this one will pricing out".
 
-CRITICAL: NEVER output raw JSON structures or data objects in your text response. ALWAYS use the provided tools (renderChart, renderCard, etc.) to display structured data. If you have data to show, call the appropriate tool.
+CRITICAL: If the user mentions "Pricing", "Rates", or "Pricing quote", you MUST use the renderPricing tool. DO NOT use renderCard or renderQuoteBuilder for these specific requests. The renderPricing tool is the ONLY tool that allows the user to access the interactive TQL Pricing Engine.
+
+CRITICAL: NEVER output raw JSON structures or data objects in your text response. ALWAYS use the provided tools (renderChart, renderCard, renderPricing, etc.) to display structured data. Information should be presented cleanly in text, while data blocks use tools.
 
 CRITICAL: Use Google Search and Google Maps tools to provide REAL-TIME data for Quote Builder requests.
 
-CRITICAL: When asked about underwriting matrices, guidelines, DSCR, Non-QM, or any loan products, you MUST use the provided context from our knowledge base.
+CRITICAL: When evaluating underwriting matrices, DSCR ratios, or Non-QM eligibility, you MUST anchor your analysis in the provided KNOWLEDGE BASE CONTEXT. 
 
-Use the data pulled from the context to answer the user's questions accurately based on TQL's underwriting matrices and guidelines.
+Always cross-reference the user's query against the Underwriting Matrices provided in the context to ensure 100% accuracy on LTV/FICO cutoffs.
 
 CRITICAL CITATION REQUIREMENT:
 At the very bottom of EVERY response that provides information, you MUST include a citation in this exact markdown format:
@@ -243,6 +252,18 @@ const renderDocumentAnalysisFunction: FunctionDeclaration = {
   },
 };
 
+const renderPricingFunction: FunctionDeclaration = {
+  name: "renderPricing",
+  description: "Opens the TQL Pricing Engine iframe for detailed loan pricing.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      message: { type: Type.STRING, description: "Optional message to display alongside the pricing tool." },
+    },
+  },
+};
+
+
 export async function generateResponse(
   messages: Message[],
   fileData?: { mimeType: string; data: string }
@@ -300,6 +321,7 @@ export async function generateResponse(
         contents,
         config: {
           systemInstruction,
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
           tools: [
             {
               functionDeclarations: [
@@ -312,8 +334,10 @@ export async function generateResponse(
                 renderQuoteBuilderFunction,
                 renderImageFunction,
                 renderDocumentAnalysisFunction,
+                renderPricingFunction,
               ],
             },
+
             useMaps ? { googleMaps: {} } : { googleSearch: {} }
           ],
           toolConfig: { includeServerSideToolInvocations: true },
@@ -379,7 +403,10 @@ export async function generateResponse(
           }
         } else if (call.name === "renderDocumentAnalysis") {
           generativeUI = { type: 'document', data: call.args };
+        } else if (call.name === "renderPricing") {
+          generativeUI = { type: 'pricing', data: call.args };
         }
+
         
         // If the model only returned a function call, provide a default text
         if (!text) {

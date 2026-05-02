@@ -23,14 +23,15 @@ export async function initializeKnowledgeBase() {
     console.log("Initializing Knowledge Base Embeddings...");
     const chunks = allChunks;
     
-    const batchSize = 100;
+    const batchSize = 20; // Reduced from 100 to avoid token-per-minute limits
     const embeddedChunks: EmbeddedChunk[] = [];
 
     for (let i = 0; i < chunks.length; i += batchSize) {
       const batch = chunks.slice(i, i + batchSize);
+      console.log(`Embedding batch ${i / batchSize + 1} of ${Math.ceil(chunks.length / batchSize)}...`);
       let success = false;
       let retryCount = 0;
-      const maxRetries = 3;
+      const maxRetries = 5; // Increased retries
 
       while (!success && retryCount < maxRetries) {
         try {
@@ -48,11 +49,16 @@ export async function initializeKnowledgeBase() {
             });
           }
           success = true;
+          
+          // Add a small delay between successful batches to stay under TPM limits
+          await new Promise(resolve => setTimeout(resolve, 500));
         } catch (error) {
           console.error(`Error embedding batch ${i} (attempt ${retryCount + 1}):`, error);
           retryCount++;
           if (retryCount < maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+            // More aggressive exponential backoff
+            const delay = Math.pow(2, retryCount) * 2000;
+            await new Promise(resolve => setTimeout(resolve, delay));
           }
         }
       }

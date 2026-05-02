@@ -14,9 +14,10 @@ export function Sidebar({ isOpen, setIsOpen, onOpenOnboarding, onAction, current
   const navItems = [
     { id: 'chat', icon: MessageSquare, label: 'Chat History' },
     { id: 'reset', icon: Trash2, label: 'Reset Chat' },
-    { id: 'quote', icon: Home, label: 'Loan Quote', disabled: true },
-    { id: 'deal', icon: Briefcase, label: 'Create Deal', disabled: true },
-    { id: 'email', icon: Mail, label: 'Email Builder', disabled: true },
+    { id: 'quote', icon: Home, label: 'Loan Quote' },
+    { id: 'deal', icon: Briefcase, label: 'Create Deal' },
+    { id: 'email', icon: Mail, label: 'Email Builder' },
+    { id: 'ideas', icon: Lightbulb, label: 'Sales Ideas' },
   ];
 
   return (
@@ -40,10 +41,8 @@ export function Sidebar({ isOpen, setIsOpen, onOpenOnboarding, onAction, current
             <div className="flex items-center justify-between">
               <div className="flex flex-col">
                 <div className="relative">
-                  <span className="font-serif font-medium text-lg text-slate-400 tracking-tight leading-tight">Quınn</span>
-                  <div className="absolute top-[18%] left-[58%] w-1 h-1 bg-sky-500 rounded-full shadow-[0_0_6px_rgba(14,165,233,0.8)] animate-pulse" />
+                  <span className="font-serif font-medium text-lg text-slate-400 tracking-tight leading-tight">Quinn</span>
                 </div>
-                <span className="font-sans font-bold text-base text-navy-900 tracking-tight leading-tight">Actions HUB</span>
               </div>
               <button 
                 onClick={() => setIsOpen(false)}
@@ -57,26 +56,22 @@ export function Sidebar({ isOpen, setIsOpen, onOpenOnboarding, onAction, current
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
             {navItems.map((item, index) => {
-              const isActive = currentView === item.id || (currentView === 'chat' && item.id === 'chat');
+              const isActive = (item.id === 'chat' && currentView === 'chat') || (item.id === 'quote' && currentView === 'quote');
               return (
                 <button
                   key={index}
-                  disabled={item.disabled}
                   onClick={() => {
-                    if (item.disabled) return;
                     onAction(item.id);
                     if (window.innerWidth < 768) setIsOpen(false);
                   }}
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                    item.disabled 
-                      ? "opacity-40 grayscale cursor-not-allowed"
-                      : isActive 
-                        ? "bg-slate-100 text-slate-900" 
-                        : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    isActive 
+                      ? "bg-slate-100 text-slate-900" 
+                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                   )}
                 >
-                  <item.icon size={18} className={isActive && !item.disabled ? "text-slate-800" : "text-slate-400"} />
+                  <item.icon size={18} className={isActive ? "text-slate-800" : "text-slate-400"} />
                   {item.label}
                 </button>
               );

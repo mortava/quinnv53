@@ -1,18 +1,17 @@
 import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
-import { ArrowUp, Mic, Paperclip, Menu, Search, Briefcase, FileText, Copy, Share2, Check, ChevronDown, ChevronRight, X, ChevronUp, Mail, Trophy, Lightbulb, Home, RefreshCw, Trash2 } from 'lucide-react';
+import { ArrowUp, Paperclip, Menu, Search, Briefcase, FileText, Copy, Share2, Check, ChevronDown, ChevronRight, X, ChevronUp, Mail, Trophy, Lightbulb, Home, RefreshCw, Trash2, Plus, Calculator } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Message } from '../types';
 import { generateResponse } from '../services/gemini';
 import { GenerativeUI } from './GenerativeUI';
-import { TypewriterQuotes } from './TypewriterQuotes';
+import { PricingModal } from './PricingModal';
 import { cn } from '../lib/utils';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ChatAreaProps {
   onMenuClick: () => void;
 }
-
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 
 export interface ChatAreaHandle {
   handleAction: (action: string) => void;
@@ -50,8 +49,8 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isStaging, setIsStaging] = useState(false);
+  const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [stagingProgress, setStagingProgress] = useState(0);
-  const [isRecording, setIsRecording] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showPriorChat, setShowPriorChat] = useState(false);
@@ -59,7 +58,6 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
   const fileInputRef = useRef<HTMLInputElement>(null);
   const heroInputRef = useRef<HTMLTextAreaElement>(null);
   const activeInputRef = useRef<HTMLTextAreaElement>(null);
-  const recognitionRef = useRef<any>(null);
 
   const resetChat = () => {
     setMessages([]);
@@ -71,7 +69,7 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
     const adjustHeight = (ref: React.RefObject<HTMLTextAreaElement>) => {
       if (ref.current) {
         ref.current.style.height = 'auto';
-        ref.current.style.height = `${Math.min(ref.current.scrollHeight, 160)}px`;
+        ref.current.style.height = `${ref.current.scrollHeight}px`;
       }
     };
     if (messages.length === 0) {
@@ -203,49 +201,6 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
     }
   };
 
-  const toggleRecording = () => {
-    if (isRecording) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsRecording(false);
-      return;
-    }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognitionRef.current = recognition;
-      recognition.continuous = false;
-      recognition.interimResults = true;
-
-      recognition.onstart = () => {
-        setIsRecording(true);
-      };
-
-      recognition.onresult = (event: any) => {
-        const transcript = Array.from(event.results)
-          .map((result: any) => result[0])
-          .map((result: any) => result.transcript)
-          .join('');
-        setInput(transcript);
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error("Speech recognition error", event.error);
-        setIsRecording(false);
-      };
-
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
-
-      recognition.start();
-    } else {
-      alert("Speech recognition is not supported in this browser.");
-    }
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -318,19 +273,19 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full relative bg-white">
+    <div className="flex-1 flex flex-col h-full bg-[#f8fafc] overflow-hidden">
       {/* Header - Only visible when chat has started */}
       {messages.length > 0 && (
-        <header className={cn(
-          "flex items-center justify-between px-4 bg-white/80 backdrop-blur-xl border-b border-slate-200 sticky top-0 z-10 transition-all duration-300 h-12 md:h-14"
-        )}>
-          <div className="flex items-center">
+        <header className="flex items-center justify-between px-4 bg-[#f8fafc]/80 backdrop-blur-xl border-b border-slate-200 shrink-0 h-14 md:h-16 z-20">
+          <div className="flex items-center gap-3">
             <div className="flex flex-col">
               <div className="relative">
-                <span className="font-serif font-medium text-xs text-slate-400 tracking-tight leading-tight">Quınn</span>
-                <div className="absolute top-[15%] left-[58%] w-0.5 h-0.5 bg-sky-500 rounded-full shadow-[0_0_4px_rgba(14,165,233,0.8)] animate-pulse" />
+                <span className="font-serif font-medium text-xs text-slate-400 tracking-tight leading-tight uppercase">Quinn AI Agent</span>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_4px_rgba(34,197,94,0.4)]" />
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Grounding Active</span>
+                </div>
               </div>
-              <span className="font-sans font-bold text-sm text-navy-900 tracking-tight leading-tight">Actions HUB</span>
             </div>
           </div>
         </header>
@@ -338,17 +293,16 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
 
       {/* Messages / Hero Area */}
       <div className={cn(
-        "flex-1 overflow-y-auto overflow-x-hidden flex flex-col w-full max-w-full",
-        messages.length === 0 ? "justify-center items-center p-6" : "p-3 md:p-4 space-y-6"
+        "flex-1 overflow-y-auto overflow-x-hidden w-full flex flex-col items-center min-h-0",
+        messages.length === 0 ? "justify-center" : "p-4 md:p-8 space-y-12"
       )}>
         {messages.length === 0 ? (
-          <div className="max-w-3xl w-full flex flex-col items-center justify-center h-full px-4 animate-in fade-in duration-700">
+          <div className="max-w-6xl w-full flex flex-col items-center justify-center h-full px-4 animate-in fade-in duration-700">
             {/* Logo/Title */}
             <div className="relative mb-6">
-              <h1 className="text-5xl sm:text-7xl md:text-8xl font-serif font-medium text-navy-900 tracking-tight">Quınn</h1>
-              <div className="absolute top-[18%] left-[58.8%] w-1.5 h-1.5 bg-sky-500 rounded-full shadow-[0_0_10px_rgba(14,165,233,0.9)] animate-pulse" />
+              <h1 className="text-[142px] leading-[104px] font-serif font-medium text-navy-900 tracking-tight">Quinn</h1>
             </div>
-            <h1 className="text-xl md:text-2xl font-medium text-slate-500 mb-10 tracking-tight text-center">Let's make something special happen today.</h1>
+            <h1 className="text-[30px] font-medium text-slate-500 mb-8 tracking-tight text-center">Let's make something special happen today.</h1>
             
             {/* Centered Input Area */}
             <div className="w-full mb-6">
@@ -382,104 +336,99 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                   </div>
                 </div>
               )}
-              <div className="relative bg-white border border-slate-200 rounded-2xl md:rounded-3xl shadow-sm focus-within:ring-1 focus-within:ring-navy-500/20 focus-within:border-navy-300 transition-all">
+              <div className="relative bg-white border border-slate-200 rounded-[2rem] shadow-sm focus-within:ring-2 focus-within:ring-navy-500/10 focus-within:border-navy-200 transition-all min-h-[120px] flex flex-col">
                 <textarea
                   ref={heroInputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder="Message Quinn..."
-                  className="w-full max-h-40 min-h-[56px] md:min-h-[64px] py-4 pl-4 md:pl-5 pr-[110px] md:pr-[120px] bg-transparent border-none focus:ring-0 resize-none text-base outline-none text-slate-800 placeholder:text-slate-400 font-sans overflow-hidden"
+                  placeholder="Ask me anything about NonQM Loans..."
+                  className="w-full flex-1 py-5 px-6 bg-transparent border-none focus:ring-0 resize-none text-[27px] leading-snug md:leading-relaxed outline-none text-[#0b0b0b] placeholder:text-slate-400 font-dm overflow-hidden"
                   rows={1}
                 />
-                <div className="absolute right-2 bottom-2 flex items-center gap-0.5 md:gap-1">
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleFileChange} 
-                    className="hidden" 
-                    accept=".pdf,.doc,.docx,.txt,.csv"
-                  />
-                  <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-2.5 md:p-2 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-colors"
-                    title="Upload document"
-                  >
-                    <Paperclip size={20} />
-                  </button>
-                  <button 
-                    onClick={toggleRecording}
-                    className={cn(
-                      "p-2.5 md:p-2 rounded-full transition-colors",
-                      isRecording 
-                        ? "text-red-500 bg-red-50 animate-pulse" 
-                        : "text-slate-400 hover:text-navy-600 hover:bg-slate-50"
-                    )}
-                    title="Voice input"
-                  >
-                    <Mic size={20} />
-                  </button>
+                <div className="flex items-center justify-between px-3 pb-3">
+                  <div className="flex items-center">
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      onChange={handleFileChange} 
+                      className="hidden" 
+                      accept=".pdf,.doc,.docx,.txt,.csv"
+                    />
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-2 text-slate-400 hover:text-navy-600 hover:bg-white/50 rounded-full transition-colors"
+                      title="Upload document"
+                    >
+                      <Plus size={22} strokeWidth={2.5} />
+                    </button>
+                  </div>
                   <button
                     onClick={() => handleSend()}
                     disabled={(!input.trim() && !selectedFile) || isLoading}
-                    className="h-10 w-10 md:h-9 md:w-9 ml-1 flex-shrink-0 bg-navy-900 hover:bg-navy-800 disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center transition-all shadow-md active:scale-95"
+                    className="h-10 w-10 flex-shrink-0 bg-[#9cb2bc] hover:bg-[#8ba3ad] disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95"
                   >
-                    <ArrowUp size={20} strokeWidth={2.5} />
+                    <ArrowUp size={20} strokeWidth={3} className="rotate-90" />
                   </button>
                 </div>
               </div>
-              <div className="flex justify-center mt-4">
+              <div className="flex justify-center mt-4 gap-4">
                 <button 
                   onClick={resetChat}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                  className="flex items-center gap-2 px-4 py-2 text-base font-medium text-black hover:bg-slate-100 rounded-full transition-all"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={18} />
                   <span>Reset Chat</span>
+                </button>
+                <button 
+                  onClick={() => setIsPricingOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 text-base font-bold text-black hover:bg-slate-100 rounded-full transition-all"
+                >
+                  <Calculator size={18} />
+                  <span>Launch TotalPricer↗</span>
                 </button>
               </div>
             </div>
 
-            {/* Quote Area */}
-            <TypewriterQuotes />
           </div>
         ) : (
-          <div className="flex flex-col space-y-6 w-full max-w-full animate-in fade-in duration-500">
+          <div className="flex flex-col space-y-12 w-full max-w-5xl animate-in fade-in duration-500">
             {messages.map((msg) => (
               <div 
                 key={msg.id} 
                 className={cn(
-                  "flex w-full gap-3 max-w-full",
-                  msg.role === 'user' ? "justify-end" : "justify-start"
+                  "flex w-full gap-4 max-w-full",
+                  msg.role === 'user' ? "justify-end" : "justify-center"
                 )}
               >
                 {msg.role === 'model' ? (
-                  <div className="flex flex-col items-center shrink-0 mt-2 ml-1">
-                    <div className="w-1.5 h-1.5 bg-slate-400 rounded-full shadow-[0_0_4px_rgba(15,23,42,0.5)] animate-pulse" />
+                  <div className="hidden md:flex flex-col items-center shrink-0 mt-3 absolute -left-8">
+                    <div className="w-2 h-2 bg-slate-400 rounded-full shadow-[0_0_6px_rgba(15,23,42,0.6)] animate-pulse" />
                   </div>
                 ) : (
-                  <div className="w-4 h-0.5 bg-sky-400 shrink-0 mt-3 mr-1" />
+                  <div className="hidden md:block w-6 h-0.5 bg-sky-400 shrink-0 mt-4 mr-2" />
                 )}
                 
                 <div className={cn(
-                  "flex flex-col gap-1",
-                  msg.role === 'user' ? "max-w-[85%] md:max-w-[75%]" : "max-w-[90%] md:max-w-[85%]"
+                  "flex flex-col gap-2 relative",
+                  msg.role === 'user' ? "max-w-[85%] md:max-w-2xl" : "w-full max-w-full items-center text-center"
                 )}>
                   <div 
                     id={`message-content-${msg.id}`}
                     className={cn(
-                      "px-4 py-3",
+                      "px-4 py-3 w-full",
                       msg.role === 'user' 
-                        ? "bg-transparent text-slate-900 rounded-none px-0" 
+                        ? "bg-transparent text-slate-900 rounded-none px-0 text-right" 
                         : msg.isError
-                          ? "bg-red-50 text-red-800 border border-red-100 rounded-2xl rounded-tl-sm"
+                          ? "bg-red-50 text-red-800 border border-red-100 rounded-2xl"
                           : "bg-transparent text-slate-800 rounded-none"
                     )}
                   >
                     {msg.content && (
                       <div 
                         className={cn(
-                          "text-[15px] leading-relaxed font-sans break-words whitespace-pre-wrap",
-                          msg.role === 'model' && !msg.isError && "markdown-body"
+                          "text-[17px] leading-relaxed font-sans break-words whitespace-pre-wrap",
+                          msg.role === 'model' && !msg.isError && "markdown-body text-left mx-auto max-w-4xl"
                         )}
                       >
                         {msg.role === 'model' ? (
@@ -499,34 +448,34 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                             handleSend(lastUserMsg.content);
                           }
                         }}
-                        className="mt-3 text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors shadow-sm"
+                        className="mt-4 text-xs font-bold flex items-center gap-1.5 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-700 rounded-lg transition-colors shadow-sm mx-auto"
                       >
-                        <RefreshCw size={12} />
+                        <RefreshCw size={14} />
                         Retry Request
                       </button>
                     )}
                     {msg.generativeUI && (
-                      <div className="mt-3 max-w-full overflow-x-auto">
-                        <GenerativeUI ui={msg.generativeUI} />
+                      <div className="mt-6 w-full flex justify-center">
+                        <GenerativeUI ui={msg.generativeUI} onOpenPricing={() => setIsPricingOpen(true)} />
                       </div>
                     )}
                   </div>
                   
                   {msg.role === 'model' && (
-                    <div className="flex items-center gap-2 mt-1 ml-2">
+                    <div className="flex items-center justify-center gap-4 mt-2">
                       <button 
                         onClick={() => handleCopy(msg.content, msg.id)} 
-                        className="text-slate-400 hover:text-navy-600 p-1.5 rounded-md hover:bg-slate-100 transition-colors"
+                        className="text-slate-400 hover:text-navy-600 p-2 rounded-md hover:bg-slate-100 transition-colors"
                         title="Copy response"
                       >
-                        {copiedId === msg.id ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                        {copiedId === msg.id ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
                       </button>
                       <button 
                         onClick={() => handleShare(msg.content, msg.id)} 
-                        className="text-slate-400 hover:text-navy-600 p-1.5 rounded-md hover:bg-slate-100 transition-colors"
+                        className="text-slate-400 hover:text-navy-600 p-2 rounded-md hover:bg-slate-100 transition-colors"
                         title="Share response"
                       >
-                        <Share2 size={14} />
+                        <Share2 size={16} />
                       </button>
                     </div>
                   )}
@@ -567,10 +516,15 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
         <div ref={messagesEndRef} />
       </div>
 
+      <PricingModal 
+        isOpen={isPricingOpen} 
+        onClose={() => setIsPricingOpen(false)} 
+      />
+
       {/* Input Area - Only visible when chat has started */}
       {messages.length > 0 && (
-        <div className="p-3 md:p-4 bg-white sticky bottom-0 pb-[max(env(safe-area-inset-bottom),0.75rem)] md:pb-[max(env(safe-area-inset-bottom),1rem)]">
-          <div className="max-w-3xl mx-auto">
+        <div className="p-3 md:p-6 bg-[#f8fafc] border-t border-slate-100 shrink-0 z-20">
+          <div className="max-w-6xl mx-auto">
             {selectedFile && (
               <div className="mb-3 flex items-center gap-2 bg-slate-50 text-slate-700 px-4 py-2 rounded-xl text-[13px] w-max border border-slate-200 animate-in slide-in-from-bottom-2 duration-300">
                 <div className="bg-navy-100 p-1.5 rounded-lg text-navy-600">
@@ -601,62 +555,59 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                 </div>
               </div>
             )}
-            <div className="flex items-center gap-2 relative bg-[#F1F5F9] border border-slate-200 rounded-3xl p-1.5 md:p-2 shadow-sm focus-within:border-navy-300 focus-within:ring-2 focus-within:ring-navy-500/10 transition-all">
-              <div className="relative flex-1 bg-white rounded-2xl overflow-hidden transition-all">
-                <textarea
-                  ref={activeInputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Message Quinn..."
-                  className="w-full max-h-32 min-h-[44px] py-2.5 px-5 bg-transparent border-none focus:ring-0 resize-none text-base outline-none placeholder:text-slate-400 overflow-hidden"
-                  rows={1}
-                />
-              </div>
-              <div className="flex items-center gap-0.5 md:gap-1 pr-1">
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleFileChange} 
-                  className="hidden" 
-                  accept=".pdf,.doc,.docx,.txt,.csv"
-                />
-                <button 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="p-2.5 md:p-2 text-slate-500 hover:text-navy-600 transition-colors rounded-full hover:bg-white/50"
-                  title="Upload document"
-                >
-                  <Paperclip size={20} />
-                </button>
-                <button 
-                  onClick={toggleRecording}
-                  className={cn(
-                    "p-2.5 md:p-2 transition-colors rounded-full hover:bg-white/50",
-                    isRecording 
-                      ? "text-red-500 animate-pulse bg-red-50" 
-                      : "text-slate-500" 
-                  )}
-                  title="Voice input"
-                >
-                  <Mic size={20} />
-                </button>
+            <div className="relative bg-white border border-slate-200 rounded-[2rem] shadow-sm focus-within:ring-2 focus-within:ring-navy-500/10 focus-within:border-navy-200 transition-all min-h-[100px] flex flex-col">
+              <textarea
+                ref={activeInputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask me anything about NonQM Loans..."
+                className="w-full flex-1 py-4 px-6 bg-transparent border-none focus:ring-0 resize-none text-[21px] md:text-[27px] leading-snug md:leading-relaxed outline-none text-[#0b0b0b] placeholder:text-slate-400 font-dm overflow-hidden"
+                rows={1}
+              />
+              <div className="flex items-center justify-between px-3 pb-3">
+                <div className="flex items-center">
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleFileChange} 
+                    className="hidden" 
+                    accept=".pdf,.doc,.docx,.txt,.csv"
+                  />
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2 text-slate-400 hover:text-navy-600 hover:bg-white/50 rounded-full transition-colors"
+                    title="Upload document"
+                  >
+                    <Plus size={22} strokeWidth={2.5} />
+                  </button>
+                </div>
                 <button
                   onClick={() => handleSend()}
                   disabled={(!input.trim() && !selectedFile) || isLoading}
-                  className="h-10 w-10 md:h-9 md:w-9 ml-1 flex-shrink-0 bg-navy-900 hover:bg-navy-800 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center transition-all shadow-md active:scale-95"
+                  className="h-9 w-9 flex-shrink-0 bg-[#9cb2bc] hover:bg-[#8ba3ad] disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95"
                 >
-                  <ArrowUp size={20} strokeWidth={2.5} />
+                  <ArrowUp size={18} strokeWidth={3} className="rotate-90" />
                 </button>
               </div>
             </div>
             <div className="text-center mt-3">
-              <button 
-                onClick={resetChat}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all mb-2"
-              >
-                <Trash2 size={14} />
-                <span>Reset Chat</span>
-              </button>
+              <div className="flex items-center justify-center gap-4 mb-2">
+                <button 
+                  onClick={resetChat}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-black hover:bg-slate-100 rounded-full transition-all"
+                >
+                  <Trash2 size={16} />
+                  <span>Reset Chat</span>
+                </button>
+                <button 
+                  onClick={() => setIsPricingOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-black hover:bg-slate-100 rounded-full transition-all"
+                >
+                  <Calculator size={16} />
+                  <span>Launch TotalPricer↗</span>
+                </button>
+              </div>
               <p className="text-[11px] text-slate-400 font-medium tracking-wide">Quinn can make mistakes. Consider verifying important information.</p>
             </div>
           </div>
