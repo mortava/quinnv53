@@ -280,10 +280,9 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
           <div className="flex items-center gap-3">
             <div className="flex flex-col">
               <div className="relative">
-                <span className="font-serif font-medium text-xs text-slate-400 tracking-tight leading-tight uppercase">Quinn AI Agent</span>
-                <div className="flex items-center gap-1.5 mt-0.5">
+                <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_4px_rgba(34,197,94,0.4)]" />
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Grounding Active</span>
+                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">TQL Grounded Model</span>
                 </div>
               </div>
             </div>
@@ -297,12 +296,12 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
         messages.length === 0 ? "justify-center" : "p-4 md:p-8 space-y-12"
       )}>
         {messages.length === 0 ? (
-          <div className="max-w-6xl w-full flex flex-col items-center justify-center h-full px-4 animate-in fade-in duration-700">
+          <div className="max-w-4xl w-full flex flex-col items-center justify-center h-full px-4 animate-in fade-in duration-700">
             {/* Logo/Title */}
             <div className="relative mb-6">
-              <h1 className="text-[142px] leading-[104px] font-serif font-medium text-navy-900 tracking-tight">Quinn</h1>
+              <h1 className="text-[80px] leading-[89px] font-serif font-medium text-[#3CCFA8] tracking-tight">Quinn</h1>
             </div>
-            <h1 className="text-[30px] font-medium text-slate-500 mb-8 tracking-tight text-center">Let's make something special happen today.</h1>
+            <h1 className="text-[20px] font-sans leading-[22px] font-medium text-slate-500 mb-8 tracking-tight text-center">Let's make something special happen today.</h1>
             
             {/* Centered Input Area */}
             <div className="w-full mb-6">
@@ -343,7 +342,7 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Ask me anything about NonQM Loans..."
-                  className="w-full flex-1 py-5 px-6 bg-transparent border-none focus:ring-0 resize-none text-[27px] leading-snug md:leading-relaxed outline-none text-[#0b0b0b] placeholder:text-slate-400 font-dm overflow-hidden"
+                  className="w-full flex-1 py-5 px-6 bg-transparent border-none focus:ring-0 resize-none text-[16px] leading-[28px] outline-none text-[#0b0b0b] placeholder:text-slate-400 font-dm overflow-hidden"
                   rows={1}
                 />
                 <div className="flex items-center justify-between px-3 pb-3">
@@ -523,8 +522,8 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
 
       {/* Input Area - Only visible when chat has started */}
       {messages.length > 0 && (
-        <div className="p-3 md:p-6 bg-[#f8fafc] border-t border-slate-100 shrink-0 z-20">
-          <div className="max-w-6xl mx-auto">
+        <div className="p-4 bg-transparent shrink-0 z-20">
+          <div className="max-w-3xl mx-auto">
             {selectedFile && (
               <div className="mb-3 flex items-center gap-2 bg-slate-50 text-slate-700 px-4 py-2 rounded-xl text-[13px] w-max border border-slate-200 animate-in slide-in-from-bottom-2 duration-300">
                 <div className="bg-navy-100 p-1.5 rounded-lg text-navy-600">
@@ -555,17 +554,17 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                 </div>
               </div>
             )}
-            <div className="relative bg-white border border-slate-200 rounded-[2rem] shadow-sm focus-within:ring-2 focus-within:ring-navy-500/10 focus-within:border-navy-200 transition-all min-h-[100px] flex flex-col">
+            <div className="relative bg-white border border-slate-200 rounded-[1.5rem] shadow-xl focus-within:ring-4 focus-within:ring-navy-500/5 focus-within:border-navy-200 transition-all min-h-[56px] flex flex-col">
               <textarea
                 ref={activeInputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Ask me anything about NonQM Loans..."
-                className="w-full flex-1 py-4 px-6 bg-transparent border-none focus:ring-0 resize-none text-[21px] md:text-[27px] leading-snug md:leading-relaxed outline-none text-[#0b0b0b] placeholder:text-slate-400 font-dm overflow-hidden"
+                className="w-full flex-1 py-3 px-5 bg-transparent border-none focus:ring-0 resize-none text-[15px] leading-relaxed outline-none text-[#0b0b0b] placeholder:text-slate-400 font-dm overflow-hidden"
                 rows={1}
               />
-              <div className="flex items-center justify-between px-3 pb-3">
+              <div className="flex items-center justify-between px-3 pb-2">
                 <div className="flex items-center">
                   <input 
                     type="file" 
@@ -576,39 +575,39 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                   />
                   <button 
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-2 text-slate-400 hover:text-navy-600 hover:bg-white/50 rounded-full transition-colors"
+                    className="p-1.5 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-colors"
                     title="Upload document"
                   >
-                    <Plus size={22} strokeWidth={2.5} />
+                    <Plus size={20} strokeWidth={2.5} />
                   </button>
                 </div>
                 <button
                   onClick={() => handleSend()}
                   disabled={(!input.trim() && !selectedFile) || isLoading}
-                  className="h-9 w-9 flex-shrink-0 bg-[#9cb2bc] hover:bg-[#8ba3ad] disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95"
+                  className="h-8 w-8 flex-shrink-0 bg-[#9cb2bc] hover:bg-[#8ba3ad] disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95"
                 >
-                  <ArrowUp size={18} strokeWidth={3} className="rotate-90" />
+                  <ArrowUp size={16} strokeWidth={3} className="rotate-90" />
                 </button>
               </div>
             </div>
             <div className="text-center mt-3">
-              <div className="flex items-center justify-center gap-4 mb-2">
+              <div className="flex items-center justify-center gap-4 mb-1.5">
                 <button 
                   onClick={resetChat}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-black hover:bg-slate-100 rounded-full transition-all"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-slate-400 hover:text-black hover:bg-slate-100 rounded-full transition-all"
                 >
-                  <Trash2 size={16} />
+                  <Trash2 size={12} />
                   <span>Reset Chat</span>
                 </button>
                 <button 
                   onClick={() => setIsPricingOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-black hover:bg-slate-100 rounded-full transition-all"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-slate-400 hover:text-black hover:bg-slate-100 rounded-full transition-all"
                 >
-                  <Calculator size={16} />
+                  <Calculator size={12} />
                   <span>Launch TotalPricer↗</span>
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium tracking-wide">Quinn can make mistakes. Consider verifying important information.</p>
+              <p className="text-[10px] text-slate-400 font-medium tracking-wide">Quinn can make mistakes. Consider verifying important information.</p>
             </div>
           </div>
         </div>
