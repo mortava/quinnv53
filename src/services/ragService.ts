@@ -6,7 +6,7 @@ interface EmbeddedChunk extends DocumentChunk {
   embedding: number[];
 }
 
-const EMBED_MODEL = (process.env.VITE_GEMINI_EMBED_MODEL as string) || 'gemini-embedding-004';
+const EMBED_MODEL = (process.env.VITE_GEMINI_EMBED_MODEL as string) || 'gemini-embedding-001';
 const CACHE_KEY = 'quinn_embeddings_v2';
 const CACHE_HASH_KEY = 'quinn_embeddings_hash_v2';
 
