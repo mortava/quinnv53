@@ -15,6 +15,7 @@
   --color-navy-700: #334e68;
   --color-navy-800: #243b53;
   --color-navy-900: #102a43;
+  --breakpoint-xs: 480px;
 }
 
 html, body, #root {

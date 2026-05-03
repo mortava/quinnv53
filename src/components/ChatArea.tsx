@@ -292,11 +292,17 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
 
       {/* Messages / Hero Area */}
       <div className={cn(
-        "flex-1 overflow-y-auto overflow-x-hidden w-full flex flex-col items-center min-h-0",
-        messages.length === 0 ? "justify-center" : "p-4 md:p-8 space-y-12"
+        "flex-1 overflow-y-auto overflow-x-hidden w-full h-full flex flex-col",
+        messages.length === 0 ? "justify-center" : ""
       )}>
-        {messages.length === 0 ? (
-          <div className="max-w-4xl w-full flex flex-col items-center justify-center h-full px-4 animate-in fade-in duration-700">
+        <div className={cn(
+          "w-full mx-auto",
+          messages.length === 0 
+            ? "max-w-4xl px-4" 
+            : "max-w-3xl px-4 sm:px-6 md:px-8 lg:px-12 py-8 md:py-12 space-y-12"
+        )}>
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center animate-in fade-in duration-700">
             {/* Logo/Title */}
             <div className="relative mb-6">
               <h1 className="text-[80px] leading-[89px] font-serif font-medium text-[#3CCFA8] tracking-tight">Quinn</h1>
@@ -391,43 +397,41 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
 
           </div>
         ) : (
-          <div className="flex flex-col space-y-12 w-full max-w-5xl animate-in fade-in duration-500">
+          <div className="flex flex-col space-y-12 w-full animate-in fade-in duration-500">
             {messages.map((msg) => (
               <div 
                 key={msg.id} 
                 className={cn(
                   "flex w-full gap-4 max-w-full",
-                  msg.role === 'user' ? "justify-end" : "justify-center"
+                  msg.role === 'user' ? "justify-end" : "justify-start"
                 )}
               >
                 {msg.role === 'model' ? (
-                  <div className="hidden md:flex flex-col items-center shrink-0 mt-3 absolute -left-8">
-                    <div className="w-2 h-2 bg-slate-400 rounded-full shadow-[0_0_6px_rgba(15,23,42,0.6)] animate-pulse" />
+                  <div className="hidden md:flex flex-col items-center shrink-0 mt-2">
+                    <div className="w-1.5 h-1.5 bg-slate-300 rounded-full" />
                   </div>
-                ) : (
-                  <div className="hidden md:block w-6 h-0.5 bg-sky-400 shrink-0 mt-4 mr-2" />
-                )}
+                ) : null}
                 
                 <div className={cn(
-                  "flex flex-col gap-2 relative",
-                  msg.role === 'user' ? "max-w-[85%] md:max-w-2xl" : "w-full max-w-full items-center text-center"
+                  "flex flex-col gap-2 relative transition-all",
+                  msg.role === 'user' ? "max-w-xl" : "w-full flex-1 min-w-0"
                 )}>
                   <div 
                     id={`message-content-${msg.id}`}
                     className={cn(
-                      "px-4 py-3 w-full",
+                      "px-0 py-0 w-full",
                       msg.role === 'user' 
-                        ? "bg-transparent text-slate-900 rounded-none px-0 text-right" 
+                        ? "text-slate-900 text-right font-medium" 
                         : msg.isError
-                          ? "bg-red-50 text-red-800 border border-red-100 rounded-2xl"
-                          : "bg-transparent text-slate-800 rounded-none"
+                          ? "bg-red-50 text-red-800 border border-red-100 rounded-2xl p-4"
+                          : "text-slate-800"
                     )}
                   >
                     {msg.content && (
                       <div 
                         className={cn(
-                          "text-[17px] leading-relaxed font-sans break-words whitespace-pre-wrap",
-                          msg.role === 'model' && !msg.isError && "markdown-body text-left mx-auto max-w-4xl"
+                          "text-[16px] leading-relaxed font-sans break-words whitespace-pre-wrap",
+                          msg.role === 'model' && !msg.isError && "markdown-body"
                         )}
                       >
                         {msg.role === 'model' ? (
@@ -454,14 +458,14 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                       </button>
                     )}
                     {msg.generativeUI && (
-                      <div className="mt-6 w-full flex justify-center">
+                      <div className="mt-6 w-full">
                         <GenerativeUI ui={msg.generativeUI} onOpenPricing={() => setIsPricingOpen(true)} />
                       </div>
                     )}
                   </div>
                   
                   {msg.role === 'model' && (
-                    <div className="flex items-center justify-center gap-4 mt-2">
+                    <div className="flex items-center gap-4 mt-2">
                       <button 
                         onClick={() => handleCopy(msg.content, msg.id)} 
                         className="text-slate-400 hover:text-navy-600 p-2 rounded-md hover:bg-slate-100 transition-colors"
@@ -513,6 +517,7 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
           </div>
         )}
         <div ref={messagesEndRef} />
+        </div>
       </div>
 
       <PricingModal 

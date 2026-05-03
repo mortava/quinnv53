@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { GenerativeUIData } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { Mail, TrendingUp, Trophy, User, DollarSign, Briefcase, Paperclip, Send, Plus, X, Check, Save, Lightbulb, MapPin, Home, School, Coffee, Info, FileText, Share2, ShieldCheck, Zap, CheckCircle2, AlertCircle, ChevronRight, Calculator, ExternalLink } from 'lucide-react';
+import { Mail, TrendingUp, Trophy, User, DollarSign, Briefcase, Paperclip, Send, Plus, X, Check, Save, Lightbulb, MapPin, Home, School, Coffee, Info, FileText, Share2, ShieldCheck, Zap, CheckCircle2, AlertCircle, ChevronRight, Calculator, ExternalLink, ArrowRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface GenerativeUIProps {
@@ -57,7 +57,7 @@ export function GenerativeUI({ ui, onOpenPricing }: GenerativeUIProps) {
 
 function PricingUI({ data, onOpenPricing }: { data: any; onOpenPricing?: () => void }) {
   return (
-    <div className="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-2xl border border-slate-100 mt-6 w-full max-w-3xl overflow-hidden font-sans animate-in zoom-in duration-700 text-left relative group">
+    <div className="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-2xl border border-slate-100 mt-6 w-full overflow-hidden font-sans animate-in zoom-in duration-700 text-left relative group">
       {/* Decorative Background Element */}
       <div className="absolute -top-24 -right-24 w-64 h-64 bg-navy-50 rounded-full opacity-20 blur-3xl group-hover:bg-navy-100 transition-colors duration-700" />
       
@@ -90,7 +90,7 @@ function PricingUI({ data, onOpenPricing }: { data: any; onOpenPricing?: () => v
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+        <div className="grid grid-cols-1 xs:grid-cols-3 gap-4">
           {[
             { label: 'Access', value: 'Instant & Direct', icon: Zap },
             { label: 'Calculations', value: 'Market-Ready', icon: ShieldCheck },
@@ -106,26 +106,28 @@ function PricingUI({ data, onOpenPricing }: { data: any; onOpenPricing?: () => v
           ))}
         </div>
 
-        <button 
-          onClick={onOpenPricing}
-          className="w-full py-6 px-10 bg-navy-900 hover:bg-navy-800 text-white rounded-2xl font-bold text-xl transition-all shadow-[0_25px_50px_-12px_rgba(10,37,64,0.35)] hover:shadow-[0_30px_60px_-12px_rgba(10,37,64,0.45)] hover:-translate-y-1.5 flex items-center justify-center gap-4 group active:scale-[0.97] border border-white/10"
-        >
-          <span>Launch Pricing Interface</span>
-          <ExternalLink size={24} strokeWidth={2.5} className="group-hover:translate-x-1.5 group-hover:-translate-y-1.5 transition-transform duration-300" />
-        </button>
-
-        <div className="mt-10 pt-8 border-t border-slate-100 flex flex-wrap items-center justify-center gap-x-12 gap-y-4">
-          <div className="flex items-center gap-2.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
-            <div className="w-1.5 h-1.5 rounded-full bg-navy-100" />
-            Secure Session
-          </div>
-          <div className="flex items-center gap-2.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
-            <div className="w-1.5 h-1.5 rounded-full bg-navy-100" />
-            Compliance Verified
-          </div>
-          <div className="flex items-center gap-2.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
-            <div className="w-1.5 h-1.5 rounded-full bg-navy-100" />
-            Cloud Native
+        <div className="mt-10 pt-8 border-t border-slate-100">
+          <button 
+            onClick={onOpenPricing}
+            className="w-full py-5 px-10 bg-navy-900 hover:bg-navy-800 text-white rounded-2xl font-bold text-lg transition-all shadow-[0_20px_40px_-12px_rgba(10,37,64,0.3)] hover:shadow-[0_25px_50px_-12px_rgba(10,37,64,0.4)] hover:-translate-y-1 flex items-center justify-center gap-3 group active:scale-[0.98] border border-white/10"
+          >
+            <span>Launch Pricing Interface</span>
+            <ExternalLink size={20} strokeWidth={2.5} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform duration-300" />
+          </button>
+          
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-12 gap-y-4">
+            <div className="flex items-center gap-2.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+              <div className="w-1.5 h-1.5 rounded-full bg-navy-100" />
+              Secure Session
+            </div>
+            <div className="flex items-center gap-2.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+              <div className="w-1.5 h-1.5 rounded-full bg-navy-100" />
+              Compliance Verified
+            </div>
+            <div className="flex items-center gap-2.5 text-[10px] font-black text-slate-400 uppercase tracking-[0.15em]">
+              <div className="w-1.5 h-1.5 rounded-full bg-navy-100" />
+              Cloud Native
+            </div>
           </div>
         </div>
       </div>
@@ -137,7 +139,7 @@ function DocumentAnalysisUI({ data }: { data: any }) {
   const { fileName, summary, keyPoints, insights, documentType, confidenceScore = 98 } = data;
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 mt-4 w-full max-w-4xl overflow-hidden font-sans">
+    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 mt-4 w-full overflow-hidden font-sans">
       <div className="bg-navy-900 p-6 text-white flex justify-between items-center">
         <div className="flex items-center gap-4">
           <div className="bg-white/10 p-3 rounded-xl backdrop-blur-sm">
@@ -169,7 +171,7 @@ function DocumentAnalysisUI({ data }: { data: any }) {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 xs:grid-cols-2 gap-8">
           {/* Key Points */}
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -205,17 +207,14 @@ function DocumentAnalysisUI({ data }: { data: any }) {
         </div>
       </div>
 
-      <div className="border-t border-slate-100 p-4 bg-slate-50/50 flex justify-between items-center">
-        <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-navy-600 transition-colors">
-            <Share2 size={14} /> Share Analysis
-          </button>
-          <button className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-navy-600 transition-colors">
-            <Save size={14} /> Export PDF
+      <div className="border-t border-slate-100 p-4 bg-slate-50/50 flex justify-between items-center px-6">
+        <div className="flex gap-4">
+          <button className="flex items-center gap-1.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-navy-600 transition-colors group">
+            Share Analysis <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
         <div className="text-[10px] text-slate-400 font-medium italic">
-          Processed by Quinn Enterprise Engine v4.2
+          Processed by Quinn v4.2
         </div>
       </div>
     </div>
@@ -225,7 +224,7 @@ function DocumentAnalysisUI({ data }: { data: any }) {
 function ImageUI({ data }: { data: any }) {
   const { url, title, prompt } = data;
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 mt-4 w-full max-w-3xl overflow-hidden font-sans group">
+    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 mt-4 w-full overflow-hidden font-sans group">
       <div className="relative aspect-square md:aspect-video overflow-hidden bg-slate-100">
         <img 
           src={url} 
@@ -237,17 +236,14 @@ function ImageUI({ data }: { data: any }) {
           <p className="text-white text-[10px] italic line-clamp-2 opacity-80">{prompt}</p>
         </div>
       </div>
-      <div className="p-4 flex justify-between items-center bg-white">
-        <div>
+      <div className="p-5 flex justify-between items-center bg-white border-t border-slate-100">
+        <div className="text-left">
           <h3 className="text-sm font-bold text-slate-900">{title}</h3>
           <p className="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">AI Generated Visualization</p>
         </div>
         <div className="flex gap-2">
           <button className="p-2 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-lg transition-colors">
             <Share2 size={16} />
-          </button>
-          <button className="p-2 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-lg transition-colors">
-            <Save size={16} />
           </button>
         </div>
       </div>
@@ -259,7 +255,7 @@ function QuoteBuilderUI({ data }: { data: any }) {
   const { clientName, propertyAddress, estimatedValue, loanAmount, interestRate, monthlyPayment, marketData } = data;
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 mt-4 w-full max-w-3xl overflow-hidden font-sans text-left">
+    <div className="bg-white rounded-2xl shadow-lg border border-slate-200 mt-4 w-full overflow-hidden font-sans text-left">
       {/* Header */}
       <div className="bg-navy-900 p-6 text-white">
         <div className="flex justify-between items-start mb-4">
@@ -279,7 +275,7 @@ function QuoteBuilderUI({ data }: { data: any }) {
 
       {/* Quote Details */}
       <div className="p-6">
-        <div className="grid grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 xs:grid-cols-2 gap-6 mb-8">
           <div className="space-y-1">
             <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Estimated Value</p>
             <p className="text-xl font-bold text-slate-900">${estimatedValue?.toLocaleString()}</p>
@@ -328,7 +324,7 @@ function QuoteBuilderUI({ data }: { data: any }) {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4 pt-2">
+              <div className="grid grid-cols-1 xs:grid-cols-2 gap-4 pt-2">
                 {marketData.nearbySchools && marketData.nearbySchools.length > 0 && (
                   <div className="space-y-2">
                     <div className="flex items-center gap-1.5 text-slate-500">
@@ -361,17 +357,14 @@ function QuoteBuilderUI({ data }: { data: any }) {
           </div>
         )}
 
-        <div className="mt-8 flex gap-3">
-          <button className="flex-1 bg-navy-900 hover:bg-navy-800 text-white py-3 rounded-xl text-sm font-bold transition-all shadow-md flex items-center justify-center gap-2">
-            Generate PDF <FileText size={18} />
-          </button>
-          <button className="px-4 py-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl transition-all flex items-center justify-center">
-            <Share2 size={18} />
+        <div className="mt-8 pt-6 border-t border-slate-100 flex gap-4">
+          <button className="flex items-center gap-1.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[#0A2540] hover:underline transition-colors group">
+            View Full Quote <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
         
-        <p className="text-[10px] text-slate-400 text-center mt-6 flex items-center justify-center gap-1">
-          <Info size={10} /> Live data provided by Google Search & Maps Grounding
+        <p className="text-[10px] text-slate-400 text-center mt-6 flex items-center justify-center gap-1 italic">
+          <Info size={10} /> Live market data via Google Maps Grounding
         </p>
       </div>
     </div>
@@ -381,7 +374,7 @@ function QuoteBuilderUI({ data }: { data: any }) {
 function FreshIdeasUI({ data }: { data: any }) {
   const { title, ideas } = data;
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mt-4 w-full max-w-3xl text-left">
+    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mt-4 w-full text-left">
       <div className="flex items-center gap-2 mb-6">
         <div className="bg-amber-100 p-2 rounded-lg">
           <Lightbulb size={20} className="text-amber-600" />
@@ -414,8 +407,8 @@ function ChartUI({ data }: { data: any }) {
   const isLTV = title.toLowerCase().includes('ltv');
 
   return (
-    <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 mt-4 w-full max-w-3xl overflow-hidden font-sans animate-in slide-in-from-bottom-4 duration-500">
-      <div className="flex justify-between items-start mb-8">
+    <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 mt-4 w-full overflow-hidden font-sans animate-in slide-in-from-bottom-4 duration-500">
+      <div className="flex justify-between items-start mb-8 text-left">
         <div>
           <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight">{title}</h3>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Market Analysis Report</p>
@@ -514,16 +507,18 @@ function ChartUI({ data }: { data: any }) {
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-6 pt-6 border-t border-slate-50 flex items-center justify-between">
+      <div className="mt-6 pt-6 border-t border-slate-100 flex flex-col gap-6">
         <div className="flex gap-4">
           {chartData.slice(0, 3).map((d: any, i: number) => (
-            <div key={i} className="flex items-center gap-1.5">
+            <div key={i} className="flex items-center gap-1.5 text-left">
               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: chartType === 'pie' ? COLORS[i % COLORS.length] : '#0A2540' }} />
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate max-w-[60px]">{d.name}</span>
             </div>
           ))}
         </div>
-        <button className="text-[10px] font-bold text-navy-600 uppercase tracking-widest hover:underline">View Full Report</button>
+        <button className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1.5 transition-all w-fit group">
+          View Detailed Report <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+        </button>
       </div>
     </div>
   );
@@ -532,17 +527,17 @@ function ChartUI({ data }: { data: any }) {
 function CardUI({ data }: { data: any }) {
   const { title, description, metrics } = data;
   return (
-    <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 mt-4 w-full max-w-2xl overflow-hidden font-sans animate-in zoom-in duration-500 text-left">
+    <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 mt-4 w-full overflow-hidden font-sans animate-in zoom-in duration-500 text-left">
       <div className="flex items-center gap-3 mb-4">
         <div className="bg-navy-50 p-2 rounded-lg">
           <Info size={18} className="text-navy-600" />
         </div>
         <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight">{title}</h3>
       </div>
-      <p className="text-xs text-slate-500 mb-8 font-medium leading-relaxed">{description}</p>
+      <p className="text-xs text-slate-800 mb-8 font-medium leading-relaxed">{description}</p>
       
       {metrics && metrics.length > 0 && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
           {metrics.map((m: any, i: number) => (
             <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-100 hover:border-navy-200 transition-all group">
               <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest group-hover:text-navy-400 transition-colors">{m.label}</p>
@@ -551,9 +546,9 @@ function CardUI({ data }: { data: any }) {
           ))}
         </div>
       )}
-      <div className="mt-6 flex justify-end">
-        <button className="text-[10px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1">
-          Learn More <ChevronRight size={12} />
+      <div className="mt-8 pt-6 border-t border-slate-100">
+        <button className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1.5 w-fit transition-all text-left group">
+          Learn More <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
     </div>
@@ -590,47 +585,47 @@ function DealUI({ data }: { data: any }) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 mt-4 w-full max-w-3xl overflow-hidden font-sans relative text-left">
-      <div className="bg-[#0A2540] p-5 text-white flex justify-between items-center">
+    <div className="bg-white rounded-2xl shadow-lg border border-slate-100 mt-4 w-full overflow-hidden font-sans relative text-left">
+      <div className="bg-navy-900 p-6 text-white flex justify-between items-center text-left">
         <div>
-          <p className="text-slate-300 text-xs font-semibold uppercase tracking-wider mb-1">Pipeline</p>
+          <p className="text-slate-300 text-[10px] font-bold uppercase tracking-widest mb-1">Pipeline Control</p>
           <h3 className="text-xl font-bold">Deal Management</h3>
         </div>
-        <div className="bg-white/10 p-2 rounded-lg backdrop-blur-sm">
-          <Briefcase size={20} className="text-slate-100" />
+        <div className="bg-white/10 p-2.5 rounded-xl backdrop-blur-sm border border-white/10">
+          <Briefcase size={20} className="text-white" />
         </div>
       </div>
       
-      <div className="p-4 border-b border-slate-100 bg-slate-50">
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+      <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+        <div className="flex items-center gap-2 overflow-x-auto pb-3 scrollbar-hide">
           {stages.map(stage => (
             <button
               key={stage}
               onClick={() => setFilter(stage)}
               className={cn(
-                "px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border",
+                "px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all border",
                 filter === stage 
-                  ? "bg-[#0A2540] text-white border-[#0A2540]" 
-                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                  ? "bg-navy-900 text-white border-navy-900 shadow-md" 
+                  : "bg-white text-slate-500 border-slate-200 hover:border-slate-300"
               )}
             >
               {stage}
             </button>
           ))}
         </div>
-        <div className="mt-2 pt-2 border-t border-slate-200 flex justify-between items-center">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Value</span>
+        <div className="mt-3 pt-3 border-t border-slate-200 flex justify-between items-center">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Pipeline Value</span>
           <span className="text-sm font-bold text-navy-900">${totalValue.toLocaleString()}</span>
         </div>
       </div>
 
-      <div className="p-4 max-h-[400px] overflow-y-auto space-y-4">
+      <div className="p-5 max-h-[400px] overflow-y-auto space-y-4">
         {filteredDeals.length > 0 ? filteredDeals.map((deal: any, idx: number) => (
-          <div key={idx} className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors bg-white shadow-sm">
-            <div className="flex justify-between items-start mb-3">
+          <div key={idx} className="border border-slate-200 rounded-xl p-4 hover:border-navy-200 transition-all bg-white group/deal">
+            <div className="flex justify-between items-start mb-4">
               <h4 className="font-bold text-slate-900">{deal.clientName}</h4>
               <span className={cn(
-                "text-[10px] font-bold px-2 py-1 rounded-full border uppercase tracking-wider",
+                "text-[9px] font-black px-2.5 py-1 rounded-full border uppercase tracking-widest",
                 deal.stage === 'Closed Won' ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
                 deal.stage === 'Closed Lost' ? "bg-red-50 text-red-700 border-red-200" :
                 deal.stage === 'Negotiation' ? "bg-amber-50 text-amber-700 border-amber-200" :
@@ -640,42 +635,38 @@ function DealUI({ data }: { data: any }) {
               </span>
             </div>
             
-            <div className="grid grid-cols-2 gap-4 mb-3">
+            <div className="grid grid-cols-1 xs:grid-cols-2 gap-6 mb-4">
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1"><DollarSign size={12}/> Value</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><DollarSign size={10}/> Loan Amount</p>
                 <p className="text-sm font-bold text-slate-900">${deal.value?.toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1"><TrendingUp size={12}/> Prob.</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5"><TrendingUp size={10}/> Probability</p>
                 <p className="text-sm font-bold text-emerald-600">{deal.probability !== undefined ? `${deal.probability}%` : 'N/A'}</p>
               </div>
-            </div>
-            
-            <div className="w-full bg-slate-100 rounded-full h-1.5 mb-4">
-              <div 
-                className={cn(
-                  "h-1.5 rounded-full",
-                  deal.stage === 'Closed Won' ? "bg-emerald-500" :
-                  deal.stage === 'Closed Lost' ? "bg-red-500" :
-                  "bg-blue-600"
-                )} 
-                style={{ width: `${deal.probability || 50}%` }}
-              ></div>
             </div>
             
             <button 
               onClick={() => handleSaveClick(dealsList.indexOf(deal))}
               disabled={savedDeals.includes(dealsList.indexOf(deal))}
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white py-2 rounded-lg text-xs font-semibold transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-navy-900 hover:bg-navy-800 text-white py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {savedDeals.includes(dealsList.indexOf(deal)) ? "Saved to Pipeline" : <>Save Deal <Save size={14} /></>}
+              {savedDeals.includes(dealsList.indexOf(deal)) ? "Sync Complete" : <>Sync to CRM <Save size={14} /></>}
             </button>
           </div>
         )) : (
-          <div className="text-center py-8 text-slate-500 text-sm">
-            No deals found in this stage.
+          <div className="text-center py-10 text-slate-400 text-sm font-medium">
+            No active opportunities in this stage.
           </div>
         )}
+      </div>
+
+      <div className="p-5 pt-0">
+        <div className="pt-4 border-t border-slate-100">
+           <button className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1 transition-all">
+            Open Advanced Pipeline Manager <ChevronRight size={14} className="mt-0.5" />
+          </button>
+        </div>
       </div>
 
       {/* Confirmation Overlay */}
@@ -778,34 +769,34 @@ function EmailUI({ data }: { data: any }) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-md border border-slate-200 mt-4 w-full max-w-3xl overflow-hidden font-sans relative text-left">
+    <div className="bg-white rounded-2xl shadow-lg border border-slate-100 mt-4 w-full overflow-hidden font-sans relative text-left">
       {/* TQL Brand Header */}
-      <div className="bg-[#0A2540] px-5 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-white">
-          <Mail size={16} className="text-[#CBA052]" />
-          <span className="text-xs font-bold uppercase tracking-widest text-white/90">TQL Email Builder</span>
+      <div className="bg-navy-900 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-2.5 text-white">
+          <Mail size={18} className="text-[#CBA052]" />
+          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/90">Enterprise Email Architect</span>
         </div>
-        <div className="flex gap-1.5">
-          <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
-          <div className="w-2.5 h-2.5 rounded-full bg-yellow-400"></div>
-          <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
+        <div className="flex gap-1.5 opacity-40">
+          <div className="w-2 h-2 rounded-full bg-white"></div>
+          <div className="w-2 h-2 rounded-full bg-white"></div>
+          <div className="w-2 h-2 rounded-full bg-white"></div>
         </div>
       </div>
       
       <div className="p-0">
-        <div className="px-5 py-3 border-b border-slate-100 flex items-center text-sm flex-wrap gap-2">
-          <span className="text-slate-400 font-medium w-16">To:</span>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center text-sm flex-wrap gap-2 bg-slate-50/30">
+          <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider w-12">To</span>
           {recipients.map((r, i) => {
             const valid = isValidEmail(r);
             return (
               <span key={i} className={cn(
-                "font-medium px-2 py-0.5 rounded text-xs flex items-center gap-1 border",
-                valid ? "bg-slate-100 text-slate-800 border-transparent" : "bg-red-50 text-red-700 border-red-200"
+                "font-bold px-3 py-1 rounded-full text-xs flex items-center gap-2 border transition-all",
+                valid ? "bg-white text-navy-900 border-slate-200" : "bg-red-50 text-red-700 border-red-200"
               )}>
                 {r}
                 <button onClick={() => removeRecipient(i)} className={cn(
                   "transition-colors",
-                  valid ? "text-slate-400 hover:text-slate-600" : "text-red-400 hover:text-red-600"
+                  valid ? "text-slate-400 hover:text-slate-900" : "text-red-400 hover:text-red-600"
                 )}>
                   <X size={12}/>
                 </button>
@@ -813,49 +804,49 @@ function EmailUI({ data }: { data: any }) {
             );
           })}
           {isAddingRecipient ? (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5 animate-in fade-in slide-in-from-left-2 transition-all">
               <input
                 type="email"
                 value={newRecipient}
                 onChange={(e) => setNewRecipient(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="email@example.com"
-                className="text-xs px-2 py-1 border border-slate-200 rounded outline-none focus:border-navy-500 w-40"
+                placeholder="Enter email..."
+                className="text-xs px-3 py-1 border border-slate-200 rounded-full outline-none focus:border-navy-500 w-48 shadow-sm transition-all"
                 autoFocus
               />
-              <button onClick={addRecipient} className="text-navy-600 hover:bg-navy-50 p-1 rounded transition-colors">
+              <button onClick={addRecipient} className="text-navy-600 hover:bg-navy-50 p-1.5 rounded-full transition-colors">
                 <Check size={14}/>
               </button>
-              <button onClick={() => { setIsAddingRecipient(false); setNewRecipient(''); }} className="text-slate-400 hover:bg-slate-50 p-1 rounded transition-colors">
+              <button onClick={() => { setIsAddingRecipient(false); setNewRecipient(''); }} className="text-slate-400 hover:bg-slate-50 p-1.5 rounded-full transition-colors">
                 <X size={14}/>
               </button>
             </div>
           ) : (
             <button 
               onClick={() => setIsAddingRecipient(true)} 
-              className="text-xs font-medium text-navy-600 bg-navy-50 hover:bg-navy-100 px-2 py-1 rounded flex items-center gap-1 transition-colors border border-navy-100"
+              className="text-[10px] font-bold text-navy-600 bg-white hover:bg-navy-50 px-3 py-1 rounded-full flex items-center gap-1.5 transition-all border border-slate-200 shadow-sm"
             >
-              <Plus size={12} /> Add Recipient
+              <Plus size={12} /> ADD
             </button>
           )}
         </div>
         
-        <div className="px-5 py-3 border-b border-slate-100 flex items-center text-sm">
-          <span className="text-slate-400 font-medium w-16">Subject:</span>
-          <span className="text-slate-900 font-semibold">{subject}</span>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center text-sm">
+          <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider w-12">Subject</span>
+          <span className="text-slate-900 font-bold">{subject}</span>
         </div>
         
-        <div className="p-5 text-[13px] text-slate-700 whitespace-pre-wrap min-h-[120px] leading-relaxed">
+        <div className="p-6 md:p-8 text-[15px] text-slate-700 whitespace-pre-wrap min-h-[160px] leading-[1.6] font-medium">
           {body}
         </div>
         
         {attachments.length > 0 && (
-          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex flex-wrap gap-2">
+          <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/30 flex flex-wrap gap-2.5">
             {attachments.map((file, idx) => (
-              <div key={idx} className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1.5 rounded-md text-xs text-slate-700 shadow-sm">
-                <Paperclip size={12} className="text-slate-400" />
-                <span className="truncate max-w-[150px]">{file.name}</span>
-                <button onClick={() => removeAttachment(idx)} className="text-slate-400 hover:text-red-500 ml-1 transition-colors">
+              <div key={idx} className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-2 rounded-xl text-[11px] font-bold text-slate-700 shadow-sm group">
+                <Paperclip size={12} className="text-slate-400 group-hover:text-navy-500 transition-colors" />
+                <span className="truncate max-w-[180px]">{file.name}</span>
+                <button onClick={() => removeAttachment(idx)} className="text-slate-300 hover:text-red-500 transition-colors">
                   <X size={12} />
                 </button>
               </div>
@@ -864,7 +855,7 @@ function EmailUI({ data }: { data: any }) {
         )}
       </div>
       
-      <div className="px-5 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+      <div className="px-6 py-5 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
         <input 
           type="file" 
           multiple 
@@ -874,19 +865,19 @@ function EmailUI({ data }: { data: any }) {
         />
         <button 
           onClick={handleAttachmentClick}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-200 hover:text-slate-900 rounded-md transition-colors"
+          className="flex items-center gap-2 px-4 py-2 text-[11px] font-bold uppercase tracking-widest text-slate-500 hover:text-navy-900 bg-white border border-slate-200 rounded-xl transition-all shadow-sm hover:shadow-md"
         >
-          <Paperclip size={16} />
-          <span>Add Attachment</span>
+          <Paperclip size={14} />
+          <span>Attach Files</span>
         </button>
-        <div className="flex gap-2">
-          <button className="px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-md transition-colors">Discard</button>
+        <div className="flex gap-3">
+          <button className="px-5 py-2 text-[11px] font-bold uppercase tracking-widest text-slate-400 hover:text-red-500 transition-colors">Discard</button>
           <button 
             onClick={handleSendClick}
             disabled={isSent || recipients.length === 0}
-            className="px-5 py-1.5 text-sm font-bold bg-[#0A2540] text-white hover:bg-[#0A2540]/90 rounded-md transition-colors shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-2 text-[11px] font-bold uppercase tracking-[0.1em] bg-navy-900 text-white hover:bg-navy-800 rounded-xl transition-all shadow-lg hover:shadow-navy-200 flex items-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
           >
-            {isSent ? "Sent!" : <>Send <Send size={14} /></>}
+            {isSent ? "Email Dispatched" : <>Deploy Draft <Send size={14} /></>}
           </button>
         </div>
       </div>
@@ -923,9 +914,9 @@ function EmailUI({ data }: { data: any }) {
 function LeaderboardUI({ data }: { data: any }) {
   const { title, entries } = data;
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 mt-4 w-full max-w-md overflow-hidden font-sans animate-in slide-in-from-right-4 duration-500">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3">
+    <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 mt-4 w-full overflow-hidden font-sans animate-in slide-in-from-right-4 duration-500 text-left">
+      <div className="flex items-center justify-between mb-8 text-left">
+        <div className="flex items-center gap-3 text-left">
           <div className="bg-amber-100 p-2 rounded-lg">
             <Trophy size={20} className="text-amber-600" />
           </div>
@@ -973,9 +964,11 @@ function LeaderboardUI({ data }: { data: any }) {
         ))}
       </div>
       
-      <button className="w-full mt-6 py-3 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border border-slate-100">
-        View Full Leaderboard
-      </button>
+      <div className="mt-8 pt-6 border-t border-slate-100">
+        <button className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1.5 w-fit transition-all text-left group">
+          View Detailed Performance Leaderboard <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform shadow-sm" />
+        </button>
+      </div>
     </div>
   );
 }
