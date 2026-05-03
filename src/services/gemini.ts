@@ -253,10 +253,12 @@ const renderPricingFunction: FunctionDeclaration = {
 };
 
 
+const CHAT_MODEL = (process.env.VITE_GEMINI_CHAT_MODEL as string) || 'gemini-2.0-flash';
+
 export async function* generateContentStream(
   messages: Message[],
   fileData?: { mimeType: string; data: string }
-): Promise<AsyncGenerator<{ text: string; generativeUI?: GenerativeUIData } | { text: string }>> {
+): AsyncGenerator<{ text: string; generativeUI?: GenerativeUIData } | { text: string }> {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   
   const lastUserMessage = messages.filter(m => m.role === 'user').pop();
@@ -295,11 +297,10 @@ export async function* generateContentStream(
                   query.toLowerCase().includes("map");
 
   const stream = await ai.models.generateContentStream({
-    model: "gemini-3.1-flash-lite-preview",
+    model: CHAT_MODEL,
     contents,
     config: {
       systemInstruction,
-      thinkingConfig: { thinkingBudget: 0 },
       tools: [
         {
           functionDeclarations: [

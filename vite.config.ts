@@ -10,6 +10,8 @@ export default defineConfig(({mode}) => {
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.RESEND_API_KEY': JSON.stringify(env.RESEND_API_KEY),
+      'process.env.VITE_GEMINI_CHAT_MODEL': JSON.stringify(env.VITE_GEMINI_CHAT_MODEL),
+      'process.env.VITE_GEMINI_EMBED_MODEL': JSON.stringify(env.VITE_GEMINI_EMBED_MODEL),
     },
     resolve: {
       alias: {

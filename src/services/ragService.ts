@@ -6,100 +6,154 @@ interface EmbeddedChunk extends DocumentChunk {
   embedding: number[];
 }
 
+const EMBED_MODEL = (process.env.VITE_GEMINI_EMBED_MODEL as string) || 'gemini-embedding-004';
+const CACHE_KEY = 'quinn_embeddings_v2';
+const CACHE_HASH_KEY = 'quinn_embeddings_hash_v2';
+
 let cachedEmbeddings: EmbeddedChunk[] | null = null;
 let initializationPromise: Promise<EmbeddedChunk[]> | null = null;
 
-/**
- * Initializes the knowledge base by embedding all chunks.
- * This is done once and cached in memory.
- */
-export async function initializeKnowledgeBase() {
+function getChunksHash(): string {
+  return `${allChunks.length}_${allChunks[0]?.id ?? 'empty'}`;
+}
+
+function loadFromLocalStorage(): EmbeddedChunk[] | null {
+  try {
+    const hash = localStorage.getItem(CACHE_HASH_KEY);
+    if (hash !== getChunksHash()) return null;
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return null;
+    return parsed as EmbeddedChunk[];
+  } catch {
+    return null;
+  }
+}
+
+function saveToLocalStorage(chunks: EmbeddedChunk[]): void {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(chunks));
+    localStorage.setItem(CACHE_HASH_KEY, getChunksHash());
+  } catch {
+    // quota exceeded — skip silently
+  }
+}
+
+export async function initializeKnowledgeBase(): Promise<EmbeddedChunk[]> {
   if (cachedEmbeddings) return cachedEmbeddings;
   if (initializationPromise) return initializationPromise;
 
-  // Attempt to load pre-computed embeddings
   initializationPromise = (async () => {
-    try {
-      const response = await fetch('/embeddings.json');
-      if (response.ok) {
-        cachedEmbeddings = await response.json();
-        console.log(`Loaded ${cachedEmbeddings!.length} embeddings from static file.`);
-        return cachedEmbeddings!;
-      }
-    } catch (e) {
-      console.warn("Failed to load pre-computed embeddings, falling back to generation.", e);
+    // 1. Memory cache (already checked above, guard for concurrency)
+    if (cachedEmbeddings) return cachedEmbeddings;
+
+    // 2. localStorage cache
+    const lsCache = loadFromLocalStorage();
+    if (lsCache) {
+      cachedEmbeddings = lsCache;
+      console.log(`[Quinn] Loaded ${lsCache.length} embeddings from localStorage.`);
+      return lsCache;
     }
 
-    // Fallback: Generate embeddings
-    return generateEmbeddings();
+    // 3. Pre-computed static file
+    try {
+      const res = await fetch('/embeddings.json');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          cachedEmbeddings = data as EmbeddedChunk[];
+          saveToLocalStorage(cachedEmbeddings);
+          console.log(`[Quinn] Loaded ${cachedEmbeddings.length} embeddings from static file.`);
+          return cachedEmbeddings;
+        }
+      }
+    } catch {
+      // fall through to generation
+    }
+
+    // 4. Generate via Gemini — return [] on any failure so the app keeps rendering
+    try {
+      const result = await generateEmbeddings();
+      cachedEmbeddings = result;
+      if (result.length > 0) saveToLocalStorage(result);
+      return result;
+    } catch (err) {
+      console.error('[Quinn] Knowledge base initialization failed, running without embeddings:', err);
+      cachedEmbeddings = [];
+      initializationPromise = null; // allow retry on next call
+      return [];
+    }
   })();
 
   return initializationPromise;
 }
 
-async function generateEmbeddings() {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  console.log("Initializing Knowledge Base Embeddings...");
+async function generateEmbeddings(): Promise<EmbeddedChunk[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.warn('[Quinn] GEMINI_API_KEY not set — skipping embedding generation.');
+    return [];
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  console.log('[Quinn] Generating knowledge base embeddings...');
+
   const chunks = allChunks;
-  
-  const batchSize = 20; 
+  const batchSize = 10; // smaller batches to stay under quota
   const embeddedChunks: EmbeddedChunk[] = [];
+  const maxRetries = 3;
 
   for (let i = 0; i < chunks.length; i += batchSize) {
     const batch = chunks.slice(i, i + batchSize);
-    console.log(`Embedding batch ${i / batchSize + 1} of ${Math.ceil(chunks.length / batchSize)}...`);
     let success = false;
     let retryCount = 0;
-    const maxRetries = 5; 
 
     while (!success && retryCount < maxRetries) {
       try {
         const result = await ai.models.embedContent({
-          model: "gemini-embedding-2-preview",
+          model: EMBED_MODEL,
           contents: batch.map(c => c.content),
         });
 
         if (result.embeddings) {
           result.embeddings.forEach((emb, index) => {
-            embeddedChunks.push({
-              ...batch[index],
-              embedding: emb.values,
-            });
+            if (emb.values) {
+              embeddedChunks.push({ ...batch[index], embedding: emb.values });
+            }
           });
         }
         success = true;
-        
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } catch (error) {
-        console.error(`Error embedding batch ${i} (attempt ${retryCount + 1}):`, error);
+
+        // 100ms pause between batches to avoid hitting the rate limit
+        await new Promise(resolve => setTimeout(resolve, 100));
+      } catch (error: any) {
         retryCount++;
-        if (retryCount < maxRetries) {
-          const delay = Math.pow(2, retryCount) * 2000;
+        const is429 = error?.status === 429 || String(error).includes('RESOURCE_EXHAUSTED');
+        if (is429 && retryCount < maxRetries) {
+          // Exponential backoff: 10s, 20s, 40s
+          const delay = Math.pow(2, retryCount) * 10_000;
+          console.warn(`[Quinn] Rate limited on batch ${i}, retrying in ${delay / 1000}s...`);
           await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          console.error(`[Quinn] Batch ${i} failed after ${retryCount} attempt(s) — skipping.`, error);
+          break;
         }
       }
     }
-    
-    if (!success) {
-      console.error(`Failed to embed batch ${i} after ${maxRetries} attempts.`);
-    }
   }
 
-  cachedEmbeddings = embeddedChunks;
-  console.log(`Knowledge Base Initialized with ${cachedEmbeddings.length} embeddings.`);
-  return cachedEmbeddings;
+  console.log(`[Quinn] Knowledge base ready: ${embeddedChunks.length} of ${chunks.length} chunks embedded.`);
+  return embeddedChunks;
 }
 
-/**
- * Dev helper: Downloads the current cached embeddings as embeddings.json
- */
+/** Dev helper: download cached embeddings as embeddings.json */
 export function exportEmbeddings() {
-  if (!cachedEmbeddings) {
-    console.error("No embeddings to export. Run a search first.");
+  if (!cachedEmbeddings || cachedEmbeddings.length === 0) {
+    console.error('[Quinn] No embeddings cached yet.');
     return;
   }
-  const data = JSON.stringify(cachedEmbeddings, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(cachedEmbeddings, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -112,83 +166,87 @@ if (typeof window !== 'undefined') {
   (window as any).exportEmbeddings = exportEmbeddings;
 }
 
-/**
- * Cosine similarity between two vectors.
- */
 function cosineSimilarity(a: number[], b: number[]) {
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
+  let dot = 0, normA = 0, normB = 0;
   for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
+    dot += a[i] * b[i];
     normA += a[i] * a[i];
     normB += b[i] * b[i];
   }
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-/**
- * Performs a hybrid search:
- * 1. Metadata filtering (tags/product lines)
- * 2. Semantic vector search
- */
-export async function hybridSearch(query: string, topK: number = 5) {
+export async function hybridSearch(query: string, topK = 5): Promise<DocumentChunk[]> {
   const embeddings = await initializeKnowledgeBase();
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  
-  // 1. Get query embedding
-  const queryResult = await ai.models.embedContent({
-    model: "gemini-embedding-2-preview",
-    contents: [query],
-  });
-  
-  if (!queryResult.embeddings || queryResult.embeddings.length === 0) {
-    throw new Error("Failed to generate query embedding");
-  }
-  
-  const queryVector = queryResult.embeddings[0].values;
 
-  // 2. Identify potential filters from the query
+  if (embeddings.length === 0) {
+    // No vectors available — fall back to keyword search
+    return keywordFallback(query, topK);
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return keywordFallback(query, topK);
+
+  const ai = new GoogleGenAI({ apiKey });
+
+  let queryVector: number[];
+  try {
+    const queryResult = await ai.models.embedContent({
+      model: EMBED_MODEL,
+      contents: [query],
+    });
+    if (!queryResult.embeddings?.[0]?.values) return keywordFallback(query, topK);
+    queryVector = queryResult.embeddings[0].values;
+  } catch {
+    return keywordFallback(query, topK);
+  }
+
   const lowerQuery = query.toLowerCase();
-  let filteredPool = embeddings;
+  let pool = embeddings;
 
-  // Simple heuristic for filtering
-  if (lowerQuery.includes("dscr")) {
-    const dscrIds = new Set(findChunksByTag("dscr").map(c => c.id));
-    filteredPool = filteredPool.filter(c => dscrIds.has(c.id));
-  } else if (lowerQuery.includes("alt doc")) {
-    const altDocIds = new Set(findChunksByProductLine("Alt Doc").map(c => c.id));
-    filteredPool = filteredPool.filter(c => altDocIds.has(c.id));
-  } else if (lowerQuery.includes("heloan") || lowerQuery.includes("2nd lien") || lowerQuery.includes("smart equity")) {
-    const heloanIds = new Set(findChunksByTag("heloan").map(c => c.id));
-    filteredPool = filteredPool.filter(c => heloanIds.has(c.id));
+  if (lowerQuery.includes('dscr')) {
+    const ids = new Set(findChunksByTag('dscr').map(c => c.id));
+    const filtered = pool.filter(c => ids.has(c.id));
+    if (filtered.length > 0) pool = filtered;
+  } else if (lowerQuery.includes('alt doc')) {
+    const ids = new Set(findChunksByProductLine('Alt Doc').map(c => c.id));
+    const filtered = pool.filter(c => ids.has(c.id));
+    if (filtered.length > 0) pool = filtered;
+  } else if (lowerQuery.includes('heloan') || lowerQuery.includes('2nd lien') || lowerQuery.includes('smart equity')) {
+    const ids = new Set(findChunksByTag('heloan').map(c => c.id));
+    const filtered = pool.filter(c => ids.has(c.id));
+    if (filtered.length > 0) pool = filtered;
   }
 
-  // If filter narrowed it down too much (e.g. 0), fall back to full pool
-  if (filteredPool.length === 0) {
-    filteredPool = embeddings;
-  }
-
-  // 3. Rank by similarity
-  const ranked = filteredPool.map(chunk => ({
-    chunk,
-    score: cosineSimilarity(queryVector, chunk.embedding)
-  }));
-
-  ranked.sort((a, b) => b.score - a.score);
+  const ranked = pool
+    .map(chunk => ({ chunk, score: cosineSimilarity(queryVector, chunk.embedding) }))
+    .sort((a, b) => b.score - a.score);
 
   return ranked.slice(0, topK).map(r => r.chunk);
 }
 
-/**
- * RAG implementation: Retrieves context and generates a response.
- */
-export async function getRagContext(query: string) {
-  const relevantChunks = await hybridSearch(query);
-  
-  const context = relevantChunks.map(c => {
-    return `[Source: ${c.sourceDocId}, Section: ${c.section}]\n${c.content}`;
-  }).join("\n\n---\n\n");
+function keywordFallback(query: string, topK: number): DocumentChunk[] {
+  const lower = query.toLowerCase();
+  const scored = allChunks
+    .map(chunk => {
+      const text = `${chunk.section} ${chunk.content}`.toLowerCase();
+      const words = lower.split(/\s+/).filter(Boolean);
+      const score = words.reduce((n, w) => n + (text.includes(w) ? 1 : 0), 0);
+      return { chunk, score };
+    })
+    .filter(r => r.score > 0)
+    .sort((a, b) => b.score - a.score);
 
-  return context;
+  return scored.slice(0, topK).map(r => r.chunk);
+}
+
+export async function getRagContext(query: string): Promise<string> {
+  try {
+    const chunks = await hybridSearch(query);
+    return chunks
+      .map(c => `[Source: ${c.sourceDocId}, Section: ${c.section}]\n${c.content}`)
+      .join('\n\n---\n\n');
+  } catch {
+    return '';
+  }
 }
