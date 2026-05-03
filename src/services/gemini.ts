@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, FunctionDeclaration, GenerateContentResponse, ThinkingLevel } from "@google/genai";
+import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { Message, GenerativeUIData, SourceRef } from "../types";
 import { getRagContext } from "./ragService";
 import { getActiveOverrides } from "../overlay";
@@ -252,49 +252,34 @@ const renderPricingFunction: FunctionDeclaration = {
   },
 };
 
-
 const CHAT_MODEL = (process.env.VITE_GEMINI_CHAT_MODEL as string) || 'gemini-2.0-flash';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
-export async function* generateContentStream(
-  messages: Message[],
+function is429(err: any): boolean {
+  return (
+    err?.status === 429 ||
+    String(err).includes('RESOURCE_EXHAUSTED') ||
+    String(err).includes('quota') ||
+    String(err).includes('QUOTA_EXCEEDED')
+  );
+}
+
+async function* runGeminiStream(
+  contents: any[],
+  query: string,
   fileData?: { mimeType: string; data: string }
-): AsyncGenerator<{ text: string; generativeUI?: GenerativeUIData } | { text: string }> {
+): AsyncGenerator<{ text: string; generativeUI?: GenerativeUIData }> {
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  
-  const lastUserMessage = messages.filter(m => m.role === 'user').pop();
-  const query = lastUserMessage?.content || "";
-  
-  // Fetch RAG context and overrides (as before)
-  const ragContext = await getRagContext(query);
-  const overrides = getActiveOverrides();
-  const overlayContext = overrides.length > 0 
-    ? `OVERLAY GUIDELINES (FINAL SOURCE OF TRUTH):\n${JSON.stringify(overrides, null, 2)}`
-    : "";
 
-  const contents: any[] = messages.map((msg) => ({
-    role: msg.role === 'user' ? 'user' : 'model',
-    parts: [{ text: msg.content }],
-  }));
-
-  // Setup contents (same as before)
-  if (contents.length > 0) {
-    const lastContent = contents[contents.length - 1];
-    if (lastContent.role === 'user') {
-      lastContent.parts = [
-        { text: `${overlayContext}\n\nKNOWLEDGE BASE CONTEXT:\n${ragContext}\n\nUSER QUERY: ${query}` }
-      ];
-    }
-  }
   if (fileData) {
-    const lastContent = contents[contents.length - 1];
-    lastContent.parts.push({
-      inlineData: { mimeType: fileData.mimeType, data: fileData.data },
-    });
+    const last = contents[contents.length - 1];
+    last.parts.push({ inlineData: { mimeType: fileData.mimeType, data: fileData.data } });
   }
 
-  const useMaps = query.toLowerCase().includes("nearby") || 
-                  query.toLowerCase().includes("location") || 
-                  query.toLowerCase().includes("map");
+  const useMaps =
+    query.toLowerCase().includes("nearby") ||
+    query.toLowerCase().includes("location") ||
+    query.toLowerCase().includes("map");
 
   const stream = await ai.models.generateContentStream({
     model: CHAT_MODEL,
@@ -316,7 +301,7 @@ export async function* generateContentStream(
             renderPricingFunction,
           ],
         },
-        useMaps ? { googleMaps: {} } : { googleSearch: {} }
+        useMaps ? { googleMaps: {} } : { googleSearch: {} },
       ],
       toolConfig: { includeServerSideToolInvocations: true },
     },
@@ -326,16 +311,15 @@ export async function* generateContentStream(
     if (chunk.text) {
       yield { text: chunk.text };
     }
-    
+
     if (chunk.functionCalls && chunk.functionCalls.length > 0) {
       const call = chunk.functionCalls[0];
       const args = { ...call.args } as any;
       const sourceRef = args.sourceRef as SourceRef | undefined;
-      delete args.sourceRef; 
+      delete args.sourceRef;
 
       let generativeUI: GenerativeUIData | undefined;
-      
-      // Re-use logic for mapping function names to UI types
+
       if (call.name === "renderChart") {
         generativeUI = { type: 'chart', data: args, sourceRef };
       } else if (call.name === "renderCard") {
@@ -350,18 +334,122 @@ export async function* generateContentStream(
         generativeUI = { type: 'ideas', data: args, sourceRef };
       } else if (call.name === "renderQuoteBuilder") {
         generativeUI = { type: 'quoteBuilder', data: args, sourceRef };
-      } else if (call.name === "renderImage") {
-         // ... (re-implement image logic inside if needed, or better, separate)
-         // For now, focusing on the UI part.
       } else if (call.name === "renderDocumentAnalysis") {
         generativeUI = { type: 'document', data: args };
       } else if (call.name === "renderPricing") {
         generativeUI = { type: 'pricing', data: args };
       }
-      
+
       if (generativeUI) {
         yield { text: "", generativeUI };
       }
     }
   }
+}
+
+async function* runGroqStream(
+  messages: Message[],
+  ragContext: string,
+  overlayContext: string,
+  query: string
+): AsyncGenerator<{ text: string }> {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error('GROQ_API_KEY not configured');
+
+  const groqMessages = [
+    { role: 'system', content: systemInstruction },
+    ...messages.slice(0, -1).map(m => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.content,
+    })),
+    {
+      role: 'user',
+      content: [overlayContext, `KNOWLEDGE BASE CONTEXT:\n${ragContext}`, `USER QUERY: ${query}`]
+        .filter(Boolean)
+        .join('\n\n'),
+    },
+  ];
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: groqMessages,
+      stream: true,
+      max_tokens: 2048,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Groq ${res.status}: ${body}`);
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (data === '[DONE]') return;
+      try {
+        const delta = JSON.parse(data)?.choices?.[0]?.delta?.content;
+        if (delta) yield { text: delta };
+      } catch {}
+    }
+  }
+}
+
+export async function* generateContentStream(
+  messages: Message[],
+  fileData?: { mimeType: string; data: string }
+): AsyncGenerator<{ text: string; generativeUI?: GenerativeUIData } | { text: string }> {
+  const lastUserMessage = messages.filter(m => m.role === 'user').pop();
+  const query = lastUserMessage?.content || "";
+
+  const ragContext = await getRagContext(query);
+  const overrides = getActiveOverrides();
+  const overlayContext = overrides.length > 0
+    ? `OVERLAY GUIDELINES (FINAL SOURCE OF TRUTH):\n${JSON.stringify(overrides, null, 2)}`
+    : "";
+
+  const contents: any[] = messages.map(msg => ({
+    role: msg.role === 'user' ? 'user' : 'model',
+    parts: [{ text: msg.content }],
+  }));
+
+  if (contents.length > 0) {
+    const last = contents[contents.length - 1];
+    if (last.role === 'user') {
+      last.parts = [{
+        text: [overlayContext, `KNOWLEDGE BASE CONTEXT:\n${ragContext}`, `USER QUERY: ${query}`]
+          .filter(Boolean)
+          .join('\n\n'),
+      }];
+    }
+  }
+
+  // Try Gemini first
+  try {
+    yield* runGeminiStream(contents, query, fileData);
+    return;
+  } catch (err: any) {
+    if (!is429(err)) throw err;
+    console.warn('[Quinn] Gemini quota exceeded — falling back to Groq');
+  }
+
+  // Groq fallback (text-only, no generative UI)
+  yield* runGroqStream(messages, ragContext, overlayContext, query);
 }
