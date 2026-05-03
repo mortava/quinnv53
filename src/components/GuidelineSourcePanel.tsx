@@ -59,7 +59,7 @@ export function GuidelineSourcePanel({ source, onClose }: GuidelineSourcePanelPr
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed right-0 top-0 h-full w-full max-w-[480px] bg-white shadow-2xl z-[51] flex flex-col border-l border-slate-200"
+            className="fixed right-0 top-0 h-full w-full md:w-[480px] md:max-w-[480px] bg-white shadow-2xl z-[51] flex flex-col border-l border-slate-200"
             role="dialog"
             aria-labelledby="panel-title"
           >
@@ -80,14 +80,14 @@ export function GuidelineSourcePanel({ source, onClose }: GuidelineSourcePanelPr
               </div>
               <button 
                 onClick={onClose}
-                className="p-2 hover:bg-white rounded-full text-slate-400 hover:text-slate-600 transition-all border border-transparent hover:border-slate-200 shadow-sm"
+                className="p-3 hover:bg-white rounded-full text-slate-400 hover:text-slate-600 transition-all border border-transparent hover:border-slate-200 shadow-sm min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <X size={20} />
               </button>
             </div>
 
             {/* Content Area */}
-            <div className="flex-1 overflow-y-auto p-8 space-y-8">
+            <div className="flex-1 overflow-y-auto p-8 space-y-8" style={{ paddingBottom: 'env(safe-area-inset-bottom, 2rem)' }}>
               {/* Breadcrumbs for clarity */}
               <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
                 <Bookmark size={12} />

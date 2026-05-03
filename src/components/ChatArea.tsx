@@ -1,40 +1,15 @@
-import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
+import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef, useCallback, lazy, Suspense } from 'react';
 import { ArrowUp, Paperclip, Menu, Search, Briefcase, FileText, Copy, Share2, Check, ChevronDown, ChevronRight, X, ChevronUp, Mail, Trophy, Lightbulb, Home, RefreshCw, Trash2, Plus, Calculator } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Message, ChatAreaProps, ChatAreaHandle, SourceRef } from '../types';
-import { generateResponse } from '../services/gemini';
+import { generateContentStream } from '../services/gemini';
 import { GenerativeUI } from './GenerativeUI';
-import { PricingModal } from './PricingModal';
-import { GuidelineSourcePanel } from './GuidelineSourcePanel';
+import { ThinkingAnimation } from './ThinkingAnimation';
+const PricingModal = lazy(() => import('./PricingModal'));
+const GuidelineSourcePanel = lazy(() => import('./GuidelineSourcePanel'));
 import { cn } from '../lib/utils';
 import { v4 as uuidv4 } from 'uuid';
-
-function ThinkingAnimation() {
-  const [phase, setPhase] = useState(0);
-  const phases = [
-    "Analyzing guidelines...",
-    "Verifying source of truth...",
-    "Cross-referencing docs...",
-    "Grounding response...",
-    "Optimizing results..."
-  ];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPhase((p) => (p < phases.length - 1 ? p + 1 : p));
-    }, 1500);
-    return () => clearInterval(interval);
-  }, [phases.length]);
-
-  return (
-    <div className="flex flex-col gap-2 max-w-sm">
-      <div className="flex items-center gap-3">
-        <span className="text-[14px] text-slate-500 font-medium animate-pulse">{phases[phase]}</span>
-      </div>
-    </div>
-  );
-}
 
 export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick }, ref) => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -160,8 +135,9 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
     const textToSend = overrideInput || input;
     if ((!textToSend.trim() && !selectedFile) || isLoading) return;
 
+    const userMessageId = uuidv4();
     const userMessage: Message = {
-      id: uuidv4(),
+      id: userMessageId,
       role: 'user',
       content: textToSend || (selectedFile ? `Uploaded document: ${selectedFile.name}` : ''),
       timestamp: new Date(),
@@ -182,15 +158,10 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
           reader.onerror = error => reject(error);
         });
         
-        // Extract base64 data and mime type
         const match = base64.match(/^data:(.+);base64,(.*)$/);
         if (match) {
-          fileData = {
-            mimeType: match[1],
-            data: match[2],
-          };
+          fileData = { mimeType: match[1], data: match[2] };
         }
-        // Small artificial delay to show "uploading" state for better UX
         await new Promise(resolve => setTimeout(resolve, 800));
       } catch (error) {
         console.error("Error reading file:", error);
@@ -200,28 +171,43 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
       setSelectedFile(null);
     }
 
-    try {
-      const response = await generateResponse([...messages, userMessage], fileData);
-      
-      const modelMessage: Message = {
-        id: uuidv4(),
-        role: 'model',
-        content: response.text,
-        timestamp: new Date(),
-        generativeUI: response.generativeUI,
-        isError: response.text.includes("I encountered an error") || response.text.includes("I'm having trouble connecting"),
-      };
+    const modelMessageId = uuidv4();
+    const modelMessage: Message = {
+      id: modelMessageId,
+      role: 'model',
+      content: '',
+      timestamp: new Date(),
+      isError: false,
+    };
+    setMessages(prev => [...prev, modelMessage]);
 
-      setMessages(prev => [...prev, modelMessage]);
+    try {
+      const stream = await generateContentStream([...messages, userMessage], fileData);
+      
+      for await (const chunk of stream) {
+        if ('text' in chunk && chunk.text) {
+          setMessages(prev => prev.map(msg => 
+            msg.id === modelMessageId 
+              ? { ...msg, content: msg.content + chunk.text }
+              : msg
+          ));
+        }
+        
+        if ('generativeUI' in chunk && chunk.generativeUI) {
+            setMessages(prev => prev.map(msg => 
+              msg.id === modelMessageId 
+                ? { ...msg, generativeUI: chunk.generativeUI }
+                : msg
+            ));
+        }
+      }
     } catch (error) {
       console.error("Error generating response:", error);
-      setMessages(prev => [...prev, {
-        id: uuidv4(),
-        role: 'model',
-        content: 'Sorry, I encountered an error processing your request.',
-        timestamp: new Date(),
-        isError: true,
-      }]);
+      setMessages(prev => prev.map(msg => 
+        msg.id === modelMessageId 
+          ? { ...msg, content: 'Sorry, I encountered an error processing your request.', isError: true }
+          : msg
+      ));
     } finally {
       setIsLoading(false);
     }
@@ -307,15 +293,22 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8fafc] overflow-hidden">
+      {/* Header with Mobile Menu Trigger */}
+      <div className="md:hidden flex items-center p-4 border-b border-slate-100 bg-white">
+        <button onClick={onMenuClick} className="p-2 text-slate-500">
+          <Menu size={24} />
+        </button>
+      </div>
+      
       {/* Messages / Hero Area */}
       <div 
         ref={messagesContainerRef}
         className={cn(
-        "flex-1 overflow-y-auto overflow-x-hidden w-full h-full flex flex-col",
+        "flex-1 overflow-y-auto overflow-x-hidden w-full h-full flex flex-col message-container",
         messages.length === 0 ? "justify-center" : ""
       )}>
         <div className={cn(
-          "w-full mx-auto",
+          "w-full mx-auto message-container",
           messages.length === 0 
             ? "max-w-4xl px-4" 
             : "max-w-3xl px-4 sm:px-6 md:px-8 lg:px-12 py-8 md:py-12 space-y-12"
@@ -397,23 +390,12 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                 </div>
               </div>
               <div className="flex justify-center mt-4 gap-4">
-                <button 
-                  onClick={resetChat}
-                  className="flex items-center gap-2 px-4 py-2 text-base font-medium text-black hover:bg-slate-100 rounded-full transition-all"
-                >
-                  <Trash2 size={18} />
-                  <span>Reset Chat</span>
-                </button>
-                <button 
-                  onClick={() => setIsPricingOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 text-base font-bold text-black hover:bg-slate-100 rounded-full transition-all"
-                >
-                  <Calculator size={18} />
-                  <span>Launch TotalPricer↗</span>
-                </button>
               </div>
             </div>
 
+            <div className="text-center mt-4">
+              <span className="text-[10px] text-slate-400 font-medium">Powered by Total Intelligence</span>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col space-y-12 w-full animate-in fade-in duration-500">
@@ -455,7 +437,7 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                       >
                         {msg.role === 'model' ? (
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {msg.content}
+                            {msg.content.includes('"render') && msg.content.trim().startsWith('{') ? "I've generated a card for you (UI might be loading...)" : msg.content}
                           </ReactMarkdown>
                         ) : (
                           msg.content
@@ -543,25 +525,29 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
         </div>
       </div>
 
-      <PricingModal 
-        isOpen={isPricingOpen} 
-        onClose={() => setIsPricingOpen(false)} 
-      />
+      <Suspense fallback={null}>
+        <PricingModal 
+          isOpen={isPricingOpen} 
+          onClose={() => setIsPricingOpen(false)} 
+        />
+      </Suspense>
 
-      <GuidelineSourcePanel 
-        source={activeSource} 
-        onClose={() => setActiveSource(null)} 
-      />
+      <Suspense fallback={null}>
+        <GuidelineSourcePanel 
+          source={activeSource} 
+          onClose={() => setActiveSource(null)} 
+        />
+      </Suspense>
 
       {/* Input Area - Floating Bubble UI */}
       {messages.length > 0 && (
-        <div className="px-4 pb-8 shrink-0 z-20">
+        <div className="px-4 chat-composer-container shrink-0 z-20">
           <div className="max-w-3xl mx-auto flex flex-col gap-2">
             {/* Scroll-to-bottom button */}
             {showScrollDown && (
               <button
                 onClick={() => scrollToBottom()}
-                className="absolute -top-16 left-1/2 -translate-x-1/2 p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-lg border border-slate-200 text-slate-500 hover:text-navy-600 hover:bg-white transition-all z-10 animate-in fade-in slide-in-from-bottom-2"
+                className="absolute bottom-24 right-6 p-2.5 bg-white shadow-xl rounded-full border border-slate-200 text-slate-500 hover:text-navy-600 hover:bg-slate-50 transition-all z-10 animate-in fade-in zoom-in"
               >
                 <ChevronDown size={20} />
               </button>
@@ -619,19 +605,19 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                     />
                     <button 
                       onClick={() => fileInputRef.current?.click()}
-                      className="p-2 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-all"
+                      className="p-3 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-all"
                     >
                       <Plus size={20} strokeWidth={2.5} />
                     </button>
                     <button 
                       onClick={resetChat}
-                      className="p-2 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-all"
+                      className="p-3 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-all"
                     >
                       <RefreshCw size={18} strokeWidth={2.5} />
                     </button>
                     <button 
                       onClick={() => setIsPricingOpen(true)}
-                      className="p-2 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-all"
+                      className="p-3 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-all"
                     >
                       <Calculator size={18} strokeWidth={2.5} />
                     </button>
@@ -642,7 +628,7 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                     onClick={() => handleSend()}
                     disabled={(!input.trim() && !selectedFile) || isLoading}
                     className={cn(
-                      "w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95",
+                      "w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95",
                       (input.trim() || selectedFile) 
                         ? "bg-slate-50 text-slate-400 hover:bg-navy-900 hover:text-white" 
                         : "bg-slate-50 text-slate-200 cursor-not-allowed"
@@ -655,7 +641,8 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
             </div>
 
             {/* Disclaimer */}
-            <div className="flex justify-end px-5">
+            <div className="flex justify-between items-center px-5">
+              <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap">Powered by Total Intelligence</span>
               <p className="text-[10px] text-slate-400 font-medium italic opacity-70">
                 Quinn can make mistakes. Consider verifying important information.
               </p>

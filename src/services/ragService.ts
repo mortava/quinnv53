@@ -17,63 +17,99 @@ export async function initializeKnowledgeBase() {
   if (cachedEmbeddings) return cachedEmbeddings;
   if (initializationPromise) return initializationPromise;
 
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
+  // Attempt to load pre-computed embeddings
   initializationPromise = (async () => {
-    console.log("Initializing Knowledge Base Embeddings...");
-    const chunks = allChunks;
-    
-    const batchSize = 20; // Reduced from 100 to avoid token-per-minute limits
-    const embeddedChunks: EmbeddedChunk[] = [];
-
-    for (let i = 0; i < chunks.length; i += batchSize) {
-      const batch = chunks.slice(i, i + batchSize);
-      console.log(`Embedding batch ${i / batchSize + 1} of ${Math.ceil(chunks.length / batchSize)}...`);
-      let success = false;
-      let retryCount = 0;
-      const maxRetries = 5; // Increased retries
-
-      while (!success && retryCount < maxRetries) {
-        try {
-          const result = await ai.models.embedContent({
-            model: "gemini-embedding-2-preview",
-            contents: batch.map(c => c.content),
-          });
-
-          if (result.embeddings) {
-            result.embeddings.forEach((emb, index) => {
-              embeddedChunks.push({
-                ...batch[index],
-                embedding: emb.values,
-              });
-            });
-          }
-          success = true;
-          
-          // Add a small delay between successful batches to stay under TPM limits
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } catch (error) {
-          console.error(`Error embedding batch ${i} (attempt ${retryCount + 1}):`, error);
-          retryCount++;
-          if (retryCount < maxRetries) {
-            // More aggressive exponential backoff
-            const delay = Math.pow(2, retryCount) * 2000;
-            await new Promise(resolve => setTimeout(resolve, delay));
-          }
-        }
+    try {
+      const response = await fetch('/embeddings.json');
+      if (response.ok) {
+        cachedEmbeddings = await response.json();
+        console.log(`Loaded ${cachedEmbeddings!.length} embeddings from static file.`);
+        return cachedEmbeddings!;
       }
-      
-      if (!success) {
-        console.error(`Failed to embed batch ${i} after ${maxRetries} attempts.`);
-      }
+    } catch (e) {
+      console.warn("Failed to load pre-computed embeddings, falling back to generation.", e);
     }
 
-    cachedEmbeddings = embeddedChunks;
-    console.log(`Knowledge Base Initialized with ${cachedEmbeddings.length} embeddings.`);
-    return cachedEmbeddings;
+    // Fallback: Generate embeddings
+    return generateEmbeddings();
   })();
 
   return initializationPromise;
+}
+
+async function generateEmbeddings() {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  console.log("Initializing Knowledge Base Embeddings...");
+  const chunks = allChunks;
+  
+  const batchSize = 20; 
+  const embeddedChunks: EmbeddedChunk[] = [];
+
+  for (let i = 0; i < chunks.length; i += batchSize) {
+    const batch = chunks.slice(i, i + batchSize);
+    console.log(`Embedding batch ${i / batchSize + 1} of ${Math.ceil(chunks.length / batchSize)}...`);
+    let success = false;
+    let retryCount = 0;
+    const maxRetries = 5; 
+
+    while (!success && retryCount < maxRetries) {
+      try {
+        const result = await ai.models.embedContent({
+          model: "gemini-embedding-2-preview",
+          contents: batch.map(c => c.content),
+        });
+
+        if (result.embeddings) {
+          result.embeddings.forEach((emb, index) => {
+            embeddedChunks.push({
+              ...batch[index],
+              embedding: emb.values,
+            });
+          });
+        }
+        success = true;
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        console.error(`Error embedding batch ${i} (attempt ${retryCount + 1}):`, error);
+        retryCount++;
+        if (retryCount < maxRetries) {
+          const delay = Math.pow(2, retryCount) * 2000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    if (!success) {
+      console.error(`Failed to embed batch ${i} after ${maxRetries} attempts.`);
+    }
+  }
+
+  cachedEmbeddings = embeddedChunks;
+  console.log(`Knowledge Base Initialized with ${cachedEmbeddings.length} embeddings.`);
+  return cachedEmbeddings;
+}
+
+/**
+ * Dev helper: Downloads the current cached embeddings as embeddings.json
+ */
+export function exportEmbeddings() {
+  if (!cachedEmbeddings) {
+    console.error("No embeddings to export. Run a search first.");
+    return;
+  }
+  const data = JSON.stringify(cachedEmbeddings, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'embeddings.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+if (typeof window !== 'undefined') {
+  (window as any).exportEmbeddings = exportEmbeddings;
 }
 
 /**

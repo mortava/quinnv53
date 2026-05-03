@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, memo } from 'react';
 import { GenerativeUIData } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { Mail, TrendingUp, Trophy, User, DollarSign, Briefcase, Paperclip, Send, Plus, X, Check, Save, Lightbulb, MapPin, Home, School, Coffee, Info, FileText, Share2, ShieldCheck, Zap, CheckCircle2, AlertCircle, ChevronRight, Calculator, ExternalLink, ArrowRight, Bookmark } from 'lucide-react';
@@ -43,7 +43,7 @@ const SourceChip = ({ source, onClick }: { source: SourceRef; onClick?: () => vo
   </button>
 );
 
-export function GenerativeUI({ ui, onOpenPricing, onOpenSource }: GenerativeUIProps) {
+export const GenerativeUI = memo(function GenerativeUI({ ui, onOpenPricing, onOpenSource }: GenerativeUIProps) {
   const handleOpenSource = () => {
     if (ui.sourceRef && onOpenSource) {
       onOpenSource(ui.sourceRef);
@@ -74,7 +74,7 @@ export function GenerativeUI({ ui, onOpenPricing, onOpenSource }: GenerativeUIPr
     default:
       return null;
   }
-}
+});
 
 function PricingUI({ data, onOpenPricing }: { data: any; onOpenPricing?: () => void }) {
   return (
