@@ -48,7 +48,13 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showPriorChat, setShowPriorChat] = useState(false);
+  
+  // Refactor: Scroll management
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
+  const [showScrollDown, setShowScrollDown] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const heroInputRef = useRef<HTMLTextAreaElement>(null);
   const activeInputRef = useRef<HTMLTextAreaElement>(null);
@@ -57,7 +63,48 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
     setMessages([]);
     setInput('');
     setSelectedFile(null);
+    setIsAutoScrollEnabled(true);
   };
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTo({
+        top: messagesContainerRef.current.scrollHeight,
+        behavior,
+      });
+      setIsAutoScrollEnabled(true);
+      setShowScrollDown(false);
+    }
+  };
+
+  // Scroll detection
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+      
+      if (isAtBottom) {
+        setIsAutoScrollEnabled(true);
+        setShowScrollDown(false);
+      } else {
+        setIsAutoScrollEnabled(false);
+        setShowScrollDown(true);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Auto-scroll on content change
+  useEffect(() => {
+    if (isAutoScrollEnabled) {
+      scrollToBottom('smooth');
+    }
+  }, [messages, isLoading, isAutoScrollEnabled]);
 
   useEffect(() => {
     const adjustHeight = (ref: React.RefObject<HTMLTextAreaElement>) => {
@@ -108,14 +155,6 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
       }
     }
   }));
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
 
   const handleSend = async (overrideInput?: string) => {
     const textToSend = overrideInput || input;
@@ -268,24 +307,10 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8fafc] overflow-hidden">
-      {/* Header - Only visible when chat has started */}
-      {messages.length > 0 && (
-        <header className="flex items-center justify-between px-4 bg-[#f8fafc]/80 backdrop-blur-xl border-b border-slate-200 shrink-0 h-14 md:h-16 z-20">
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col">
-              <div className="relative">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full shadow-[0_0_4px_rgba(34,197,94,0.4)]" />
-                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">TQL Grounded Model</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
-      )}
-
       {/* Messages / Hero Area */}
-      <div className={cn(
+      <div 
+        ref={messagesContainerRef}
+        className={cn(
         "flex-1 overflow-y-auto overflow-x-hidden w-full h-full flex flex-col",
         messages.length === 0 ? "justify-center" : ""
       )}>
@@ -528,94 +553,112 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
         onClose={() => setActiveSource(null)} 
       />
 
-      {/* Input Area - Only visible when chat has started */}
+      {/* Input Area - Floating Bubble UI */}
       {messages.length > 0 && (
-        <div className="p-4 bg-transparent shrink-0 z-20">
-          <div className="max-w-3xl mx-auto">
-            {selectedFile && (
-              <div className="mb-3 flex items-center gap-2 bg-slate-50 text-slate-700 px-4 py-2 rounded-xl text-[13px] w-max border border-slate-200 animate-in slide-in-from-bottom-2 duration-300">
-                <div className="bg-navy-100 p-1.5 rounded-lg text-navy-600">
-                  <FileText size={16} />
-                </div>
-                <div className="flex flex-col">
-                  <span className="truncate max-w-[200px] font-bold text-slate-900">{selectedFile.name}</span>
-                  <span className="text-[10px] text-green-600 font-bold uppercase tracking-wider flex items-center gap-1">
-                    <Check size={10} strokeWidth={3} /> Ready for analysis
-                  </span>
-                </div>
-                <button onClick={() => setSelectedFile(null)} className="ml-2 text-slate-400 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-slate-100">
-                  <X size={16} />
-                </button>
-              </div>
+        <div className="px-4 pb-8 shrink-0 z-20">
+          <div className="max-w-3xl mx-auto flex flex-col gap-2">
+            {/* Scroll-to-bottom button */}
+            {showScrollDown && (
+              <button
+                onClick={() => scrollToBottom()}
+                className="absolute -top-16 left-1/2 -translate-x-1/2 p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-lg border border-slate-200 text-slate-500 hover:text-navy-600 hover:bg-white transition-all z-10 animate-in fade-in slide-in-from-bottom-2"
+              >
+                <ChevronDown size={20} />
+              </button>
             )}
-            {isStaging && (
-              <div className="mb-3 flex flex-col gap-2 bg-slate-50 px-4 py-3 rounded-xl border border-slate-200 w-full max-w-xs animate-in fade-in">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-700">Preparing document...</span>
-                  <span className="text-[10px] font-mono text-slate-400">{stagingProgress}%</span>
+
+            {/* Label */}
+            <div className="px-5 flex items-center">
+              <span className="text-[13px] font-bold text-slate-800 tracking-tight">Quinn | Deal Desk</span>
+            </div>
+
+            {/* Input Bubble */}
+            <div className="relative bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200/60 p-2 transition-all focus-within:shadow-[0_4px_20px_rgb(0,0,0,0.06)] focus-within:border-slate-300 transform-gpu">
+              {/* File Staging / Progress UI */}
+              {(selectedFile || isStaging) && (
+                <div className="px-4 pt-2 pb-1">
+                  {selectedFile && (
+                    <div className="flex items-center gap-2 bg-slate-50 text-slate-700 px-3 py-1.5 rounded-full text-[12px] w-max border border-slate-100 mb-1 animate-in slide-in-from-top-1">
+                      <div className="text-navy-600"><FileText size={14} /></div>
+                      <span className="truncate max-w-[150px] font-semibold">{selectedFile.name}</span>
+                      <button onClick={() => setSelectedFile(null)} className="ml-1 text-slate-400 hover:text-red-500"><X size={14} /></button>
+                    </div>
+                  )}
+                  {isStaging && (
+                    <div className="w-full flex items-center gap-2 animate-pulse mb-1">
+                      <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-navy-600 transition-all" style={{ width: `${stagingProgress}%` }} />
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-400">{stagingProgress}%</span>
+                    </div>
+                  )}
                 </div>
-                <div className="w-full h-1 bg-slate-200 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-navy-600 transition-all duration-300 ease-out" 
-                    style={{ width: `${stagingProgress}%` }}
-                  />
-                </div>
-              </div>
-            )}
-            <div className="relative bg-white border border-slate-200 rounded-[1.5rem] shadow-xl focus-within:ring-4 focus-within:ring-navy-500/5 focus-within:border-navy-200 transition-all min-h-[56px] flex flex-col">
-              <textarea
-                ref={activeInputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask me anything about NonQM Loans..."
-                className="w-full flex-1 py-3 px-5 bg-transparent border-none focus:ring-0 resize-none text-[15px] leading-relaxed outline-none text-[#0b0b0b] placeholder:text-slate-400 font-dm overflow-hidden"
-                rows={1}
-              />
-              <div className="flex items-center justify-between px-3 pb-2">
-                <div className="flex items-center">
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    onChange={handleFileChange} 
-                    className="hidden" 
-                    accept=".pdf,.doc,.docx,.txt,.csv"
-                  />
-                  <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-1.5 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-colors"
-                    title="Upload document"
+              )}
+
+              <div className="flex flex-col">
+                <textarea
+                  ref={activeInputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask me anything about NonQM Loans..."
+                  rows={1}
+                  className="w-full bg-transparent border-none focus:ring-0 text-[15px] font-medium text-slate-700 placeholder:text-slate-400 py-3 px-4 resize-none max-h-48 scrollbar-hide"
+                  disabled={isLoading}
+                />
+
+                <div className="flex items-center justify-between pl-2 pr-1 pb-1">
+                  {/* Left Controls */}
+                  <div className="flex items-center gap-0.5">
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      onChange={handleFileChange} 
+                      className="hidden" 
+                      accept=".pdf,.doc,.docx,.txt,.csv"
+                    />
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-2 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-all"
+                    >
+                      <Plus size={20} strokeWidth={2.5} />
+                    </button>
+                    <button 
+                      onClick={resetChat}
+                      className="p-2 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-all"
+                    >
+                      <RefreshCw size={18} strokeWidth={2.5} />
+                    </button>
+                    <button 
+                      onClick={() => setIsPricingOpen(true)}
+                      className="p-2 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-all"
+                    >
+                      <Calculator size={18} strokeWidth={2.5} />
+                    </button>
+                  </div>
+
+                  {/* Right Controls - Send */}
+                  <button
+                    onClick={() => handleSend()}
+                    disabled={(!input.trim() && !selectedFile) || isLoading}
+                    className={cn(
+                      "w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95",
+                      (input.trim() || selectedFile) 
+                        ? "bg-slate-50 text-slate-400 hover:bg-navy-900 hover:text-white" 
+                        : "bg-slate-50 text-slate-200 cursor-not-allowed"
+                    )}
                   >
-                    <Plus size={20} strokeWidth={2.5} />
+                    <ArrowUp size={20} className={cn(isLoading && "animate-bounce")} />
                   </button>
                 </div>
-                <button
-                  onClick={() => handleSend()}
-                  disabled={(!input.trim() && !selectedFile) || isLoading}
-                  className="h-8 w-8 flex-shrink-0 bg-[#9cb2bc] hover:bg-[#8ba3ad] disabled:bg-slate-100 disabled:text-slate-300 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95"
-                >
-                  <ArrowUp size={16} strokeWidth={3} className="rotate-90" />
-                </button>
               </div>
             </div>
-            <div className="text-center mt-3">
-              <div className="flex items-center justify-center gap-4 mb-1.5">
-                <button 
-                  onClick={resetChat}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-slate-400 hover:text-black hover:bg-slate-100 rounded-full transition-all"
-                >
-                  <Trash2 size={12} />
-                  <span>Reset Chat</span>
-                </button>
-                <button 
-                  onClick={() => setIsPricingOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-slate-400 hover:text-black hover:bg-slate-100 rounded-full transition-all"
-                >
-                  <Calculator size={12} />
-                  <span>Launch TotalPricer↗</span>
-                </button>
-              </div>
-              <p className="text-[10px] text-slate-400 font-medium tracking-wide">Quinn can make mistakes. Consider verifying important information.</p>
+
+            {/* Disclaimer */}
+            <div className="flex justify-end px-5">
+              <p className="text-[10px] text-slate-400 font-medium italic opacity-70">
+                Quinn can make mistakes. Consider verifying important information.
+              </p>
             </div>
           </div>
         </div>

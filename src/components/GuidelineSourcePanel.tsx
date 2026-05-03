@@ -20,8 +20,20 @@ export function GuidelineSourcePanel({ source, onClose }: GuidelineSourcePanelPr
 
   if (!source) return null;
 
+  const stripMarkdown = (text: string) => {
+    return text
+      .replace(/^#+\s+/gm, '') // Headers
+      .replace(/\*\*(.*?)\*\*/g, '$1') // Bold
+      .replace(/\*(.*?)\*/g, '$1') // Italic
+      .replace(/__(.*?)__/g, '$1') // Underline/Bold
+      .replace(/_(.*?)_/g, '$1') // Italic
+      .trim();
+  };
+
   const chunk = allChunks.find(c => c.sourceDocId === source.docId && c.section === source.sectionTitle);
-  const content = chunk?.content || "Full guideline content not available.";
+  const rawContent = chunk?.content || "Full guideline content not available.";
+  const content = stripMarkdown(rawContent);
+  const highlightText = source.content ? stripMarkdown(source.content) : null;
 
   const handleCopyCitation = () => {
     const citation = `${source.sectionTitle} - ${source.docId} (Source Ref: ${source.sectionId})`;
@@ -89,15 +101,15 @@ export function GuidelineSourcePanel({ source, onClose }: GuidelineSourcePanelPr
               {/* Main Text with Highlighting */}
               <div className="prose prose-slate max-w-none">
                 <div className="bg-white rounded-xl border border-slate-100 p-6 shadow-sm leading-relaxed whitespace-pre-wrap text-slate-700 font-medium">
-                  {/* We apply a subtle highlight if source.content is provided */}
-                  {source.content ? (
+                  {/* We apply a subtle highlight if highlightText is provided */}
+                  {highlightText ? (
                     (() => {
-                      const parts = content.split(source.content);
+                      const parts = content.split(highlightText);
                       if (parts.length > 1) {
                         return (
                           <>
                             {parts[0]}
-                            <span className="bg-yellow-100 px-1 rounded-sm ring-1 ring-yellow-200 text-slate-900 border-b-2 border-yellow-300 font-semibold">{source.content}</span>
+                            <span className="bg-yellow-100 px-1 rounded-sm ring-1 ring-yellow-200 text-slate-900 border-b-2 border-yellow-300 font-semibold">{highlightText}</span>
                             {parts[1]}
                           </>
                         );

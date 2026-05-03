@@ -384,12 +384,12 @@ function QuoteBuilderUI({ data, sourceRef, onOpenSource }: { data: any; sourceRe
         <div className="mt-8 pt-6 border-t border-slate-100 flex gap-4">
           <button 
             onClick={() => sourceRef && onOpenSource?.(sourceRef)}
-            className="flex items-center gap-1.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[#0A2540] hover:underline transition-colors group"
+            className="flex items-center gap-1.5 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.15em] text-[#0A2540] hover:opacity-70 transition-colors group"
           >
-            View Source Guideline <ChevronRight size={14} className="mt-0.5 group-hover:translate-x-1 transition-transform" />
+            CHECK GUIDELINE SOURCE <ChevronRight size={14} className="mt-0.5 group-hover:translate-x-1 transition-transform" />
           </button>
-          <button className="flex items-center gap-1.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-slate-400 group cursor-not-allowed">
-            View Full Quote <ArrowRight size={14} className="mt-0.5" />
+          <button className="flex items-center gap-1.5 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.15em] text-slate-400 group cursor-not-allowed">
+            VIEW FULL QUOTE <ArrowRight size={14} className="mt-0.5" />
           </button>
         </div>
         
@@ -554,9 +554,9 @@ function ChartUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: Sou
         </div>
         <button 
           onClick={() => sourceRef && onOpenSource?.(sourceRef)}
-          className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1.5 transition-all w-fit group"
+          className="text-[11px] font-extrabold text-navy-600 uppercase tracking-[0.15em] hover:opacity-70 flex items-center gap-2 transition-all w-fit group"
         >
-          Learn More <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          CHECK GUIDELINE SOURCE <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
     </div>
@@ -591,9 +591,9 @@ function CardUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: Sour
       <div className="mt-8 pt-6 border-t border-slate-100">
         <button 
           onClick={() => sourceRef && onOpenSource?.(sourceRef)}
-          className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1.5 w-fit transition-all text-left group"
+          className="text-[11px] font-extrabold text-navy-600 uppercase tracking-[0.15em] hover:opacity-70 flex items-center gap-2 w-fit transition-all text-left group"
         >
-          Check Guideline Source <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          CHECK GUIDELINE SOURCE <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
     </div>
@@ -713,9 +713,9 @@ function DealUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: Sour
         <div className="pt-4 border-t border-slate-100">
            <button 
              onClick={() => sourceRef && onOpenSource?.(sourceRef)}
-             className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1 transition-all"
+             className="text-[11px] font-extrabold text-navy-600 uppercase tracking-[0.15em] hover:opacity-70 flex items-center gap-2 transition-all group"
            >
-            View Guideline Source <ChevronRight size={14} className="mt-0.5" />
+            CHECK GUIDELINE SOURCE <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
       </div>
@@ -1022,9 +1022,9 @@ function LeaderboardUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef
       <div className="mt-8 pt-6 border-t border-slate-100">
         <button 
           onClick={() => sourceRef && onOpenSource?.(sourceRef)}
-          className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1.5 w-fit transition-all text-left group"
+          className="text-[11px] font-extrabold text-navy-600 uppercase tracking-[0.15em] hover:opacity-70 flex items-center gap-2 w-fit transition-all text-left group"
         >
-          View Source Analysis <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform shadow-sm" />
+          CHECK GUIDELINE SOURCE <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform shadow-sm" />
         </button>
       </div>
     </div>
