@@ -143,3 +143,5 @@ export function GuidelineSourcePanel({ source, onClose }: GuidelineSourcePanelPr
     </AnimatePresence>
   );
 }
+
+export default GuidelineSourcePanel;

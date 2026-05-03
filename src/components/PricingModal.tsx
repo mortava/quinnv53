@@ -62,3 +62,5 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
     </div>
   );
 }
+
+export default PricingModal;
