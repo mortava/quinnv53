@@ -2,29 +2,22 @@ import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef } f
 import { ArrowUp, Paperclip, Menu, Search, Briefcase, FileText, Copy, Share2, Check, ChevronDown, ChevronRight, X, ChevronUp, Mail, Trophy, Lightbulb, Home, RefreshCw, Trash2, Plus, Calculator } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Message } from '../types';
+import { Message, ChatAreaProps, ChatAreaHandle, SourceRef } from '../types';
 import { generateResponse } from '../services/gemini';
 import { GenerativeUI } from './GenerativeUI';
 import { PricingModal } from './PricingModal';
+import { GuidelineSourcePanel } from './GuidelineSourcePanel';
 import { cn } from '../lib/utils';
 import { v4 as uuidv4 } from 'uuid';
-
-interface ChatAreaProps {
-  onMenuClick: () => void;
-}
-
-export interface ChatAreaHandle {
-  handleAction: (action: string) => void;
-}
 
 function ThinkingAnimation() {
   const [phase, setPhase] = useState(0);
   const phases = [
-    "Analyzing enterprise data...",
-    "Accessing knowledge base...",
-    "Synthesizing market insights...",
-    "Optimizing results...",
-    "Finalizing report..."
+    "Analyzing guidelines...",
+    "Verifying source of truth...",
+    "Cross-referencing docs...",
+    "Grounding response...",
+    "Optimizing results..."
   ];
 
   useEffect(() => {
@@ -37,7 +30,7 @@ function ThinkingAnimation() {
   return (
     <div className="flex flex-col gap-2 max-w-sm">
       <div className="flex items-center gap-3">
-        <span className="text-[15px] text-slate-500 animate-pulse">{phases[phase]}</span>
+        <span className="text-[14px] text-slate-500 font-medium animate-pulse">{phases[phase]}</span>
       </div>
     </div>
   );
@@ -50,6 +43,7 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
   const [isUploading, setIsUploading] = useState(false);
   const [isStaging, setIsStaging] = useState(false);
   const [isPricingOpen, setIsPricingOpen] = useState(false);
+  const [activeSource, setActiveSource] = useState<SourceRef | null>(null);
   const [stagingProgress, setStagingProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -459,7 +453,11 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                     )}
                     {msg.generativeUI && (
                       <div className="mt-6 w-full">
-                        <GenerativeUI ui={msg.generativeUI} onOpenPricing={() => setIsPricingOpen(true)} />
+                        <GenerativeUI 
+                          ui={msg.generativeUI} 
+                          onOpenPricing={() => setIsPricingOpen(true)} 
+                          onOpenSource={(source) => setActiveSource(source)}
+                        />
                       </div>
                     )}
                   </div>
@@ -523,6 +521,11 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
       <PricingModal 
         isOpen={isPricingOpen} 
         onClose={() => setIsPricingOpen(false)} 
+      />
+
+      <GuidelineSourcePanel 
+        source={activeSource} 
+        onClose={() => setActiveSource(null)} 
       />
 
       {/* Input Area - Only visible when chat has started */}

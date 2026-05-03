@@ -1,12 +1,14 @@
 import React, { useState, useRef } from 'react';
 import { GenerativeUIData } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { Mail, TrendingUp, Trophy, User, DollarSign, Briefcase, Paperclip, Send, Plus, X, Check, Save, Lightbulb, MapPin, Home, School, Coffee, Info, FileText, Share2, ShieldCheck, Zap, CheckCircle2, AlertCircle, ChevronRight, Calculator, ExternalLink, ArrowRight } from 'lucide-react';
+import { Mail, TrendingUp, Trophy, User, DollarSign, Briefcase, Paperclip, Send, Plus, X, Check, Save, Lightbulb, MapPin, Home, School, Coffee, Info, FileText, Share2, ShieldCheck, Zap, CheckCircle2, AlertCircle, ChevronRight, Calculator, ExternalLink, ArrowRight, Bookmark } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { SourceRef } from '../types';
 
 interface GenerativeUIProps {
   ui: GenerativeUIData;
   onOpenPricing?: () => void;
+  onOpenSource?: (source: SourceRef) => void;
 }
 
 const COLORS = ['#0A2540', '#3B82F6', '#10B981', '#F59E0B', '#6366F1'];
@@ -28,22 +30,41 @@ const CustomTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-export function GenerativeUI({ ui, onOpenPricing }: GenerativeUIProps) {
+const SourceChip = ({ source, onClick }: { source: SourceRef; onClick?: () => void }) => (
+  <button 
+    onClick={(e) => {
+      e.stopPropagation();
+      onClick?.();
+    }}
+    className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-navy-50 text-navy-700 rounded-full border border-navy-100 hover:bg-navy-100 transition-all group/source ml-2"
+  >
+    <Bookmark size={10} className="text-navy-400 group-hover/source:text-navy-600" />
+    <span className="text-[10px] font-bold uppercase tracking-wider">{source.docId} § {source.sectionTitle}</span>
+  </button>
+);
+
+export function GenerativeUI({ ui, onOpenPricing, onOpenSource }: GenerativeUIProps) {
+  const handleOpenSource = () => {
+    if (ui.sourceRef && onOpenSource) {
+      onOpenSource(ui.sourceRef);
+    }
+  };
+
   switch (ui.type) {
     case 'chart':
-      return <ChartUI data={ui.data} />;
+      return <ChartUI data={ui.data} sourceRef={ui.sourceRef} onOpenSource={onOpenSource} />;
     case 'card':
-      return <CardUI data={ui.data} />;
+      return <CardUI data={ui.data} sourceRef={ui.sourceRef} onOpenSource={onOpenSource} />;
     case 'deal':
-      return <DealUI data={ui.data} />;
+      return <DealUI data={ui.data} sourceRef={ui.sourceRef} onOpenSource={onOpenSource} />;
     case 'email':
-      return <EmailUI data={ui.data} />;
+      return <EmailUI data={ui.data} sourceRef={ui.sourceRef} onOpenSource={onOpenSource} />;
     case 'leaderboard':
-      return <LeaderboardUI data={ui.data} />;
+      return <LeaderboardUI data={ui.data} sourceRef={ui.sourceRef} onOpenSource={onOpenSource} />;
     case 'ideas':
-      return <FreshIdeasUI data={ui.data} />;
+      return <FreshIdeasUI data={ui.data} sourceRef={ui.sourceRef} onOpenSource={onOpenSource} />;
     case 'quoteBuilder':
-      return <QuoteBuilderUI data={ui.data} />;
+      return <QuoteBuilderUI data={ui.data} sourceRef={ui.sourceRef} onOpenSource={onOpenSource} />;
     case 'image':
       return <ImageUI data={ui.data} />;
     case 'document':
@@ -251,7 +272,7 @@ function ImageUI({ data }: { data: any }) {
   );
 }
 
-function QuoteBuilderUI({ data }: { data: any }) {
+function QuoteBuilderUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: SourceRef; onOpenSource?: (s: SourceRef) => void }) {
   const { clientName, propertyAddress, estimatedValue, loanAmount, interestRate, monthlyPayment, marketData } = data;
 
   return (
@@ -260,7 +281,10 @@ function QuoteBuilderUI({ data }: { data: any }) {
       <div className="bg-navy-900 p-6 text-white">
         <div className="flex justify-between items-start mb-4">
           <div>
-            <p className="text-navy-300 text-xs font-bold uppercase tracking-widest mb-1">Loan Quote</p>
+            <div className="flex items-center gap-2 mb-1">
+              <p className="text-navy-300 text-xs font-bold uppercase tracking-widest">Loan Quote</p>
+              {sourceRef && <SourceChip source={sourceRef} onClick={() => onOpenSource?.(sourceRef)} />}
+            </div>
             <h3 className="text-2xl font-bold">{clientName}</h3>
           </div>
           <div className="bg-white/10 p-3 rounded-xl backdrop-blur-md border border-white/10">
@@ -358,8 +382,14 @@ function QuoteBuilderUI({ data }: { data: any }) {
         )}
 
         <div className="mt-8 pt-6 border-t border-slate-100 flex gap-4">
-          <button className="flex items-center gap-1.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[#0A2540] hover:underline transition-colors group">
-            View Full Quote <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+          <button 
+            onClick={() => sourceRef && onOpenSource?.(sourceRef)}
+            className="flex items-center gap-1.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-[#0A2540] hover:underline transition-colors group"
+          >
+            View Source Guideline <ChevronRight size={14} className="mt-0.5 group-hover:translate-x-1 transition-transform" />
+          </button>
+          <button className="flex items-center gap-1.5 py-1.5 text-[11px] font-bold uppercase tracking-widest text-slate-400 group cursor-not-allowed">
+            View Full Quote <ArrowRight size={14} className="mt-0.5" />
           </button>
         </div>
         
@@ -371,15 +401,18 @@ function QuoteBuilderUI({ data }: { data: any }) {
   );
 }
 
-function FreshIdeasUI({ data }: { data: any }) {
+function FreshIdeasUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: SourceRef; onOpenSource?: (s: SourceRef) => void }) {
   const { title, ideas } = data;
   return (
     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mt-4 w-full text-left">
-      <div className="flex items-center gap-2 mb-6">
-        <div className="bg-amber-100 p-2 rounded-lg">
-          <Lightbulb size={20} className="text-amber-600" />
+      <div className="flex items-center justify-between gap-2 mb-6">
+        <div className="flex items-center gap-2">
+          <div className="bg-amber-100 p-2 rounded-lg">
+            <Lightbulb size={20} className="text-amber-600" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight">{title}</h3>
         </div>
-        <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight">{title}</h3>
+        {sourceRef && <SourceChip source={sourceRef} onClick={() => onOpenSource?.(sourceRef)} />}
       </div>
       
       <div className="space-y-4">
@@ -401,7 +434,7 @@ function FreshIdeasUI({ data }: { data: any }) {
   );
 }
 
-function ChartUI({ data }: { data: any }) {
+function ChartUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: SourceRef; onOpenSource?: (s: SourceRef) => void }) {
   const { chartType, title, data: chartData } = data;
   const maxValue = Math.max(...chartData.map((d: any) => d.value));
   const isLTV = title.toLowerCase().includes('ltv');
@@ -410,7 +443,10 @@ function ChartUI({ data }: { data: any }) {
     <div className="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 mt-4 w-full overflow-hidden font-sans animate-in slide-in-from-bottom-4 duration-500">
       <div className="flex justify-between items-start mb-8 text-left">
         <div>
-          <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight">{title}</h3>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight">{title}</h3>
+            {sourceRef && <SourceChip source={sourceRef} onClick={() => onOpenSource?.(sourceRef)} />}
+          </div>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Market Analysis Report</p>
         </div>
         <div className="text-right">
@@ -516,23 +552,29 @@ function ChartUI({ data }: { data: any }) {
             </div>
           ))}
         </div>
-        <button className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1.5 transition-all w-fit group">
-          View Detailed Report <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+        <button 
+          onClick={() => sourceRef && onOpenSource?.(sourceRef)}
+          className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1.5 transition-all w-fit group"
+        >
+          Learn More <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
     </div>
   );
 }
 
-function CardUI({ data }: { data: any }) {
+function CardUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: SourceRef; onOpenSource?: (s: SourceRef) => void }) {
   const { title, description, metrics } = data;
   return (
     <div className="bg-white p-8 rounded-2xl shadow-lg border border-slate-100 mt-4 w-full overflow-hidden font-sans animate-in zoom-in duration-500 text-left">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="bg-navy-50 p-2 rounded-lg">
-          <Info size={18} className="text-navy-600" />
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-3">
+          <div className="bg-navy-50 p-2 rounded-lg">
+            <Info size={18} className="text-navy-600" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight">{title}</h3>
         </div>
-        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight">{title}</h3>
+        {sourceRef && <SourceChip source={sourceRef} onClick={() => onOpenSource?.(sourceRef)} />}
       </div>
       <p className="text-xs text-slate-800 mb-8 font-medium leading-relaxed">{description}</p>
       
@@ -547,15 +589,18 @@ function CardUI({ data }: { data: any }) {
         </div>
       )}
       <div className="mt-8 pt-6 border-t border-slate-100">
-        <button className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1.5 w-fit transition-all text-left group">
-          Learn More <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+        <button 
+          onClick={() => sourceRef && onOpenSource?.(sourceRef)}
+          className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1.5 w-fit transition-all text-left group"
+        >
+          Check Guideline Source <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
         </button>
       </div>
     </div>
   );
 }
 
-function DealUI({ data }: { data: any }) {
+function DealUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: SourceRef; onOpenSource?: (s: SourceRef) => void }) {
   const dealsList = data.deals ? data.deals : (data.clientName ? [data] : []);
   const [filter, setFilter] = useState<string>('All');
   const [savingDealIndex, setSavingDealIndex] = useState<number | null>(null);
@@ -588,7 +633,10 @@ function DealUI({ data }: { data: any }) {
     <div className="bg-white rounded-2xl shadow-lg border border-slate-100 mt-4 w-full overflow-hidden font-sans relative text-left">
       <div className="bg-navy-900 p-6 text-white flex justify-between items-center text-left">
         <div>
-          <p className="text-slate-300 text-[10px] font-bold uppercase tracking-widest mb-1">Pipeline Control</p>
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-slate-300 text-[10px] font-bold uppercase tracking-widest">Pipeline Control</p>
+            {sourceRef && <SourceChip source={sourceRef} onClick={() => onOpenSource?.(sourceRef)} />}
+          </div>
           <h3 className="text-xl font-bold">Deal Management</h3>
         </div>
         <div className="bg-white/10 p-2.5 rounded-xl backdrop-blur-sm border border-white/10">
@@ -663,8 +711,11 @@ function DealUI({ data }: { data: any }) {
 
       <div className="p-5 pt-0">
         <div className="pt-4 border-t border-slate-100">
-           <button className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1 transition-all">
-            Open Advanced Pipeline Manager <ChevronRight size={14} className="mt-0.5" />
+           <button 
+             onClick={() => sourceRef && onOpenSource?.(sourceRef)}
+             className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1 transition-all"
+           >
+            View Guideline Source <ChevronRight size={14} className="mt-0.5" />
           </button>
         </div>
       </div>
@@ -698,7 +749,7 @@ function DealUI({ data }: { data: any }) {
   );
 }
 
-function EmailUI({ data }: { data: any }) {
+function EmailUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: SourceRef; onOpenSource?: (s: SourceRef) => void }) {
   const { subject, body, to } = data;
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSent, setIsSent] = useState(false);
@@ -775,6 +826,7 @@ function EmailUI({ data }: { data: any }) {
         <div className="flex items-center gap-2.5 text-white">
           <Mail size={18} className="text-[#CBA052]" />
           <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-white/90">Enterprise Email Architect</span>
+          {sourceRef && <SourceChip source={sourceRef} onClick={() => onOpenSource?.(sourceRef)} />}
         </div>
         <div className="flex gap-1.5 opacity-40">
           <div className="w-2 h-2 rounded-full bg-white"></div>
@@ -911,7 +963,7 @@ function EmailUI({ data }: { data: any }) {
   );
 }
 
-function LeaderboardUI({ data }: { data: any }) {
+function LeaderboardUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: SourceRef; onOpenSource?: (s: SourceRef) => void }) {
   const { title, entries } = data;
   return (
     <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 mt-4 w-full overflow-hidden font-sans animate-in slide-in-from-right-4 duration-500 text-left">
@@ -921,7 +973,10 @@ function LeaderboardUI({ data }: { data: any }) {
             <Trophy size={20} className="text-amber-600" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight">{title}</h3>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-tight">{title}</h3>
+              {sourceRef && <SourceChip source={sourceRef} onClick={() => onOpenSource?.(sourceRef)} />}
+            </div>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Top Performers</p>
           </div>
         </div>
@@ -965,8 +1020,11 @@ function LeaderboardUI({ data }: { data: any }) {
       </div>
       
       <div className="mt-8 pt-6 border-t border-slate-100">
-        <button className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1.5 w-fit transition-all text-left group">
-          View Detailed Performance Leaderboard <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform shadow-sm" />
+        <button 
+          onClick={() => sourceRef && onOpenSource?.(sourceRef)}
+          className="text-[11px] font-bold text-navy-600 uppercase tracking-widest hover:underline flex items-center gap-1.5 w-fit transition-all text-left group"
+        >
+          View Source Analysis <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform shadow-sm" />
         </button>
       </div>
     </div>

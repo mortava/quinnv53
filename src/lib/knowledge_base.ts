@@ -34,6 +34,16 @@ export function findChunksByProductLine(productLine: string) {
     .flatMap(doc => doc.chunks);
 }
 
+/** Quick lookup: find chunk by ID */
+export function findChunkById(id: string) {
+  return allChunks.find(c => c.id === id);
+}
+
+/** Quick lookup: find chunk by sourceDocId and sectionTitle */
+export function findChunkBySection(docId: string, sectionTitle: string) {
+  return allChunks.find(c => c.sourceDocId === docId && c.section === sectionTitle);
+}
+
 /** Summary of loaded knowledge base */
 export const knowledgeBaseSummary = {
   totalDocuments: 5,

@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ChatArea, ChatAreaHandle } from './components/ChatArea';
+import { ChatArea } from './components/ChatArea';
+import { ChatAreaHandle } from './types';
 import { OnboardingGuide } from './components/OnboardingGuide';
 import { QuoteBuilder } from './components/QuoteBuilder';
 import { Sidebar } from './components/Sidebar';

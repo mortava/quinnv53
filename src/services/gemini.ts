@@ -1,10 +1,23 @@
 import { GoogleGenAI, Type, FunctionDeclaration, GenerateContentResponse, ThinkingLevel } from "@google/genai";
-import { Message, GenerativeUIData } from "../types";
+import { Message, GenerativeUIData, SourceRef } from "../types";
 import { getRagContext } from "./ragService";
 import { getActiveOverrides } from "../overlay";
+import { findChunkBySection } from "../lib/knowledge_base";
+
+async function validateSourceRef(sourceRef: any): Promise<boolean> {
+  if (!sourceRef || !sourceRef.docId || !sourceRef.sectionTitle) return false;
+  const chunk = findChunkBySection(sourceRef.docId, sourceRef.sectionTitle);
+  return !!chunk;
+}
 
 const systemInstruction = `
 You are Quinn, a sophisticated and optimistic AI partner at Total Quality Lending (TQL). Your persona is modeled after an exceptionally knowledgeable co-worker who is both intelligent and calm. You speak with clarity, focusing on possibilities and concrete data.
+
+STRICT GROUNDING RULE:
+1. **Source of Truth**: You MUST cite exactly one specific guideline section for every factual claim about Non-QM guidelines (DSCR, LTV, pricing, doc type rules, etc.).
+2. **Context Restriction**: Answer ONLY from the provided KNOWLEDGE BASE CONTEXT. If the information is not present, respond with: "I can't find this in the current guideline set." Do NOT guess or hallucinate.
+3. **Citations**: For every visual component you render, you MUST include a \`sourceRef\` object: \`{ docId, sectionId, sectionTitle, content }\`.
+   - \`content\` should be a short snippet (1-2 sentences) from the source that directly supports the answer for highlighting.
 
 1. **The 3-Part Response Structure**:
    - **Part A: The Direct Sentence**: Start with exactly one sentence that answers the core question directly. **Bold the key value or answer** (e.g., "The maximum LTV for this DSCR scenario is **75%**.").
@@ -17,13 +30,18 @@ You are Quinn, a sophisticated and optimistic AI partner at Total Quality Lendin
    - **Concise Intelligence**: Keep the entire prose section (A+B+C) to approximately 3–4 sentences total.
 
 CRITICAL: Skip all preambles. Dive straight into Part A. Use Generative UI elements whenever they add value.
-
-CRITICAL: To ensure maximum user engagement and a premium experience, you MUST use Generative UI elements in almost every response where it adds value. The Generative UI must ALWAYS follow the detailed textual consultation.
-- Use Charts to visualize data trends.
-- Use Cards to summarize key information or profiles.
-- Use Quote Builders for any loan or property-related inquiries.
-- Use Pricing Tools when the user asks about interest rates, pricing, quotes, or if they want to see "how this one will pricing out".
 `;
+
+const sourceRefProperty = {
+  type: Type.OBJECT,
+  properties: {
+    docId: { type: Type.STRING },
+    sectionId: { type: Type.STRING },
+    sectionTitle: { type: Type.STRING },
+    content: { type: Type.STRING, description: "Short snippet from the source for highlighting." },
+  },
+  required: ["docId", "sectionId", "sectionTitle"],
+};
 
 const renderChartFunction: FunctionDeclaration = {
   name: "renderChart",
@@ -31,14 +49,8 @@ const renderChartFunction: FunctionDeclaration = {
   parameters: {
     type: Type.OBJECT,
     properties: {
-      chartType: {
-        type: Type.STRING,
-        description: "The type of chart: 'bar', 'line', or 'pie'",
-      },
-      title: {
-        type: Type.STRING,
-        description: "The title of the chart",
-      },
+      chartType: { type: Type.STRING },
+      title: { type: Type.STRING },
       data: {
         type: Type.ARRAY,
         items: {
@@ -49,8 +61,8 @@ const renderChartFunction: FunctionDeclaration = {
           },
           required: ["name", "value"],
         },
-        description: "The data points for the chart",
       },
+      sourceRef: sourceRefProperty,
     },
     required: ["chartType", "title", "data"],
   },
@@ -75,6 +87,7 @@ const renderCardFunction: FunctionDeclaration = {
           required: ["label", "value"],
         },
       },
+      sourceRef: sourceRefProperty,
     },
     required: ["title", "description"],
   },
@@ -99,6 +112,7 @@ const renderDealFunction: FunctionDeclaration = {
           required: ["clientName", "value", "stage"],
         },
       },
+      sourceRef: sourceRefProperty,
     },
     required: ["deals"],
   },
@@ -113,6 +127,7 @@ const renderEmailFunction: FunctionDeclaration = {
       subject: { type: Type.STRING },
       body: { type: Type.STRING },
       to: { type: Type.STRING },
+      sourceRef: sourceRefProperty,
     },
     required: ["subject", "body"],
   },
@@ -137,6 +152,7 @@ const renderLeaderboardFunction: FunctionDeclaration = {
           required: ["name", "score", "rank"],
         },
       },
+      sourceRef: sourceRefProperty,
     },
     required: ["title", "entries"],
   },
@@ -161,6 +177,7 @@ const renderIdeasFunction: FunctionDeclaration = {
           required: ["title", "description"],
         },
       },
+      sourceRef: sourceRefProperty,
     },
     required: ["title", "ideas"],
   },
@@ -187,6 +204,7 @@ const renderQuoteBuilderFunction: FunctionDeclaration = {
           marketTrend: { type: Type.STRING, description: "e.g., 'Rising', 'Stable', 'Falling'" },
         },
       },
+      sourceRef: sourceRefProperty,
     },
     required: ["clientName", "propertyAddress", "estimatedValue", "loanAmount", "interestRate", "monthlyPayment"],
   },
@@ -321,21 +339,32 @@ export async function generateResponse(
 
       if (response.functionCalls && response.functionCalls.length > 0) {
         const call = response.functionCalls[0];
-        
+        const args = { ...call.args } as any;
+        const sourceRef = args.sourceRef as SourceRef | undefined;
+        delete args.sourceRef; // Remove from data to keep clean
+
+        const isValidSource = !sourceRef || await validateSourceRef(sourceRef);
+
+        if (!isValidSource && retryCount < 1) {
+          console.warn("Invalid source citation detected. Retrying...");
+          retryCount++;
+          continue; 
+        }
+
         if (call.name === "renderChart") {
-          generativeUI = { type: 'chart', data: call.args };
+          generativeUI = { type: 'chart', data: args, sourceRef };
         } else if (call.name === "renderCard") {
-          generativeUI = { type: 'card', data: call.args };
+          generativeUI = { type: 'card', data: args, sourceRef };
         } else if (call.name === "renderDeal") {
-          generativeUI = { type: 'deal', data: call.args };
+          generativeUI = { type: 'deal', data: args, sourceRef };
         } else if (call.name === "renderEmail") {
-          generativeUI = { type: 'email', data: call.args };
+          generativeUI = { type: 'email', data: args, sourceRef };
         } else if (call.name === "renderLeaderboard") {
-          generativeUI = { type: 'leaderboard', data: call.args };
+          generativeUI = { type: 'leaderboard', data: args, sourceRef };
         } else if (call.name === "renderIdeas") {
-          generativeUI = { type: 'ideas', data: call.args };
+          generativeUI = { type: 'ideas', data: args, sourceRef };
         } else if (call.name === "renderQuoteBuilder") {
-          generativeUI = { type: 'quoteBuilder', data: call.args };
+          generativeUI = { type: 'quoteBuilder', data: args, sourceRef };
         } else if (call.name === "renderImage") {
           const { prompt, title, aspectRatio = "1:1", size = "1K" } = call.args as any;
           
