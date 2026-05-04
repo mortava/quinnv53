@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useImperativeHandle, forwardRef, us
 import { ArrowUp, Paperclip, Menu, Search, Briefcase, FileText, Copy, Share2, Check, ChevronDown, ChevronRight, X, ChevronUp, Mail, Trophy, Lightbulb, Home, RefreshCw, Trash2, Plus, Calculator } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Message, ChatAreaProps, ChatAreaHandle, SourceRef } from '../types';
+import { Message, ChatAreaProps, ChatAreaHandle, SourceRef, CitationSource } from '../types';
 import { generateContentStream } from '../services/gemini';
 import { GenerativeUI } from './GenerativeUI';
 import { ThinkingAnimation } from './ThinkingAnimation';
@@ -194,11 +194,22 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
         }
         
         if ('generativeUI' in chunk && chunk.generativeUI) {
-            setMessages(prev => prev.map(msg => 
-              msg.id === modelMessageId 
-                ? { ...msg, generativeUI: chunk.generativeUI }
-                : msg
-            ));
+            const ui = chunk.generativeUI;
+            setMessages(prev => prev.map(msg => {
+              if (msg.id !== modelMessageId) return msg;
+              const newSource: CitationSource | null = ui.sourceRef ? {
+                document: ui.sourceRef.docId || '',
+                section: ui.sourceRef.sectionTitle || '',
+                content: ui.sourceRef.content,
+                docId: ui.sourceRef.docId,
+                sectionId: ui.sourceRef.sectionId,
+              } : null;
+              const existingSources = msg.sources || [];
+              const sources = newSource && !existingSources.some(s => s.section === newSource.section)
+                ? [...existingSources, newSource]
+                : existingSources;
+              return { ...msg, generativeUI: ui, sources };
+            }));
         }
       }
     } catch (error) {
@@ -470,21 +481,42 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                   </div>
                   
                   {msg.role === 'model' && !msg.isError && !(isLoading && index === messages.length - 1) && (
-                    <div className="flex items-center gap-4 mt-2">
-                      <button
-                        onClick={() => handleCopy(msg.content, msg.id)}
-                        className="text-slate-400 hover:text-navy-600 p-2 rounded-md hover:bg-slate-100 transition-colors"
-                        title="Copy response"
-                      >
-                        {copiedId === msg.id ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-                      </button>
-                      <button
-                        onClick={() => handleShare(msg.content, msg.id)}
-                        className="text-slate-400 hover:text-navy-600 p-2 rounded-md hover:bg-slate-100 transition-colors"
-                        title="Share response"
-                      >
-                        <Share2 size={16} />
-                      </button>
+                    <div className="flex flex-col gap-2 mt-2">
+                      {msg.sources && msg.sources.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {msg.sources.map((source, i) => (
+                            <button
+                              key={i}
+                              onClick={() => source.docId && setActiveSource({
+                                docId: source.docId,
+                                sectionId: source.sectionId || '',
+                                sectionTitle: source.section,
+                                content: source.content,
+                              })}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 text-slate-500 text-[11px] font-medium rounded-full hover:bg-teal-50 hover:border-teal-200 hover:text-teal-700 transition-colors cursor-pointer"
+                            >
+                              <FileText size={10} />
+                              {source.section}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleCopy(msg.content, msg.id)}
+                          className="text-slate-400 hover:text-navy-600 p-2 rounded-md hover:bg-slate-100 transition-colors"
+                          title="Copy response"
+                        >
+                          {copiedId === msg.id ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                        </button>
+                        <button
+                          onClick={() => handleShare(msg.content, msg.id)}
+                          className="text-slate-400 hover:text-navy-600 p-2 rounded-md hover:bg-slate-100 transition-colors"
+                          title="Share response"
+                        >
+                          <Share2 size={16} />
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

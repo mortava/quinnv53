@@ -11,37 +11,37 @@ async function validateSourceRef(sourceRef: any): Promise<boolean> {
 }
 
 const systemInstruction = `
-You are Quinn, an experienced mortgage deal desk specialist at TQL. Fast, confident, practical — like a pro co-worker talking to a broker on the phone.
+You are Quinn, a sharp, friendly deal desk specialist at TQL. Talk like a smart colleague — clear, optimistic, casual but professional.
 
-PERSONA:
-- Short sentences, bullet points, direct answers. No corporate/legal/PDF speak.
-- Always end with a clear action: "Want me to price this out?" / "Need to tighten the structure?"
-- Skip all preambles — start answering immediately.
+TONE & STYLE:
+- Short paragraphs. Plain English. No corporate jargon or robotic bullet checklists.
+- It's fine to be warm: "Good news —", "Happy to help you work through this." Never sycophantic or over-the-top.
+- Never start with "Certainly!", "Great question!", or "As an AI…" — just answer directly.
+- Use bullet points ONLY when the user is explicitly asking for a list. Otherwise write in flowing sentences.
+- No hashtag headers, no emoji section dividers, no "Source:" lines inlined in your text.
 
-RESPONSE FORMAT (always follow this structure):
-**[Direct answer to the question with the key fact/number]**
-
-✅ **What Works:** [what's eligible / what passes]
-❌ **Watch Out:** [restrictions, overlays, gotchas]
-**→ Next:** [specific action the broker should take]
-
-*Source: [guideline section name] — [lender/doc name]*
+ANSWER STRUCTURE:
+1. Lead with the direct answer in one or two sentences.
+2. Follow with any necessary context or caveats in natural prose.
+3. End with a brief next step or offer to dig deeper — "Want me to run the numbers on your specific scenario?"
 
 GROUNDING RULES (non-negotiable):
-1. Answer ONLY from the provided KNOWLEDGE BASE CONTEXT. If not found, say "I can't find that in the guidelines."
-2. Every factual claim (LTV, DSCR, rate, score) must reference a specific guideline section.
+1. Answer ONLY from the provided KNOWLEDGE BASE CONTEXT. If not found, say "I don't see that covered in the guidelines — want me to check another angle?"
+2. Reference guidelines naturally ("per TQL's DSCR guidelines…") — never dump raw metadata like docId, sectionId, JSON objects, or sourceRef blobs into your answer.
 3. Never hallucinate numbers or rules.
 
-GENERATIVE UI — ALWAYS call a render function for guideline answers:
-- ANY question about LTV, DSCR, rates, overlays, eligibility → call **renderCard** with the key metrics in metrics[]
-- LTV comparisons, rate tiers, DSCR thresholds across scenarios → call **renderChart** (bar chart)
-- Loan structure scenarios → call **renderCard** with the scenario details
-- ALWAYS include sourceRef: { docId, sectionId, sectionTitle, content } with a 1-2 sentence snippet
-- Call the render function AND provide the text explanation — never text-only for factual questions
-- renderCard metrics should be concrete: { label: "Max LTV", value: "80%" }, { label: "Min DSCR", value: "1.10" }
+GENERATIVE UI — call render functions for visual guideline data:
+- Any question about LTV, DSCR, rates, overlays, eligibility → call renderCard with key metrics in metrics[]
+- Comparisons across scenarios or tiers → call renderChart
+- ALWAYS include sourceRef: { docId, sectionId, sectionTitle, content } in the function call
+- Call the render function IN ADDITION to your text explanation — never text-only for factual questions
+
+EXAMPLE:
+User: "Max LTV on a DSCR with a non-arm's length transaction?"
+Quinn: "Good news — non-arm's length transactions are allowed on DSCR, with a max LTV/CLTV of 80%. Employer-to-employee sales or transfers aren't eligible though, so just make sure that's not the situation here. You'll also want documentation like 12 months of cancelled checks or a gift letter on file. Want me to sanity-check your specific scenario?"
 `;
 
-// ─── Function Declarations (Gemini format, also used for Groq conversion) ────
+// ─── Function Declarations ────────────────────────────────────────────────────
 
 const sourceRefProperty = {
   type: Type.OBJECT,
@@ -242,7 +242,7 @@ const ALL_FUNCTIONS: FunctionDeclaration[] = [
   renderPricingFunction,
 ];
 
-// ─── Shared UI mapper (used by both Gemini and Groq paths) ───────────────────
+// ─── Shared UI mapper ─────────────────────────────────────────────────────────
 
 function mapToGenerativeUI(name: string, args: any, sourceRef?: SourceRef): GenerativeUIData | undefined {
   switch (name) {
@@ -259,7 +259,21 @@ function mapToGenerativeUI(name: string, args: any, sourceRef?: SourceRef): Gene
   }
 }
 
-// ─── Model config ────────────────────────────────────────────────────────────
+// ─── Text sanitizer — strips any leaked scaffold labels ───────────────────────
+
+function sanitizeText(text: string): string {
+  return text
+    .replace(/✅\s*\*\*What Works:\*\*\s*/g, '')
+    .replace(/❌\s*\*\*Watch Out:\*\*\s*/g, '')
+    .replace(/\*\*→\s*Next:\*\*\s*/g, '')
+    .replace(/\*Source:[^*\n]*\*/g, '')
+    .replace(/Source:\s*\[[^\]]*\][^\n]*/g, '')
+    .replace(/#{1,3}\s*(What Works|Watch Out|Next Step|Next|WhatWorks|WhatDoesnt|WhatToDoNext):?\s*/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+// ─── Model config ─────────────────────────────────────────────────────────────
 
 const CHAT_MODEL = (process.env.VITE_GEMINI_CHAT_MODEL as string) || 'gemini-2.0-flash';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
@@ -269,57 +283,12 @@ function is429(err: any): boolean {
     err?.status === 429 ||
     String(err).includes('RESOURCE_EXHAUSTED') ||
     String(err).includes('quota') ||
-    String(err).includes('QUOTA_EXCEEDED')
+    String(err).includes('QUOTA_EXCEEDED') ||
+    String(err).includes('rate_limit')
   );
 }
 
-// ─── Gemini streaming path ───────────────────────────────────────────────────
-
-async function* runGeminiStream(
-  contents: any[],
-  query: string,
-  fileData?: { mimeType: string; data: string }
-): AsyncGenerator<{ text: string; generativeUI?: GenerativeUIData }> {
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-  if (fileData) {
-    const last = contents[contents.length - 1];
-    last.parts.push({ inlineData: { mimeType: fileData.mimeType, data: fileData.data } });
-  }
-
-  const useMaps =
-    query.toLowerCase().includes("nearby") ||
-    query.toLowerCase().includes("location") ||
-    query.toLowerCase().includes("map");
-
-  const stream = await ai.models.generateContentStream({
-    model: CHAT_MODEL,
-    contents,
-    config: {
-      systemInstruction,
-      tools: [
-        { functionDeclarations: ALL_FUNCTIONS },
-        useMaps ? { googleMaps: {} } : { googleSearch: {} },
-      ],
-      toolConfig: { includeServerSideToolInvocations: true },
-    },
-  });
-
-  for await (const chunk of stream) {
-    if (chunk.text) yield { text: chunk.text };
-
-    if (chunk.functionCalls && chunk.functionCalls.length > 0) {
-      const call = chunk.functionCalls[0];
-      const args = { ...call.args } as any;
-      const sourceRef = args.sourceRef as SourceRef | undefined;
-      delete args.sourceRef;
-      const ui = mapToGenerativeUI(call.name!, args, sourceRef);
-      if (ui) yield { text: "", generativeUI: ui };
-    }
-  }
-}
-
-// ─── Groq streaming path (with full tool support) ───────────────────────────
+// ─── Groq streaming path (primary) ───────────────────────────────────────────
 
 async function* runGroqStream(
   messages: Message[],
@@ -346,7 +315,6 @@ async function* runGroqStream(
     },
   ];
 
-  // Convert Gemini FunctionDeclarations → OpenAI tool format
   const openAITools = ALL_FUNCTIONS.map(fn => ({ type: 'function', function: fn }));
 
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -406,7 +374,6 @@ async function* runGroqStream(
     }
   }
 
-  // Flush accumulated tool calls as generativeUI
   for (const tc of Object.values(pendingCalls)) {
     if (!tc.name) continue;
     try {
@@ -416,12 +383,58 @@ async function* runGroqStream(
       const ui = mapToGenerativeUI(tc.name, args, sourceRef);
       if (ui) yield { text: '', generativeUI: ui };
     } catch {
-      // malformed JSON arguments — skip
+      // malformed JSON — skip
     }
   }
 }
 
-// ─── Public entry point ──────────────────────────────────────────────────────
+// ─── Gemini streaming path (fallback) ────────────────────────────────────────
+
+async function* runGeminiStream(
+  contents: any[],
+  query: string,
+  fileData?: { mimeType: string; data: string }
+): AsyncGenerator<{ text: string; generativeUI?: GenerativeUIData }> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+  if (fileData) {
+    const last = contents[contents.length - 1];
+    last.parts.push({ inlineData: { mimeType: fileData.mimeType, data: fileData.data } });
+  }
+
+  const useMaps =
+    query.toLowerCase().includes("nearby") ||
+    query.toLowerCase().includes("location") ||
+    query.toLowerCase().includes("map");
+
+  const stream = await ai.models.generateContentStream({
+    model: CHAT_MODEL,
+    contents,
+    config: {
+      systemInstruction,
+      tools: [
+        { functionDeclarations: ALL_FUNCTIONS },
+        useMaps ? { googleMaps: {} } : { googleSearch: {} },
+      ],
+      toolConfig: { includeServerSideToolInvocations: true },
+    },
+  });
+
+  for await (const chunk of stream) {
+    if (chunk.text) yield { text: chunk.text };
+
+    if (chunk.functionCalls && chunk.functionCalls.length > 0) {
+      const call = chunk.functionCalls[0];
+      const args = { ...call.args } as any;
+      const sourceRef = args.sourceRef as SourceRef | undefined;
+      delete args.sourceRef;
+      const ui = mapToGenerativeUI(call.name!, args, sourceRef);
+      if (ui) yield { text: "", generativeUI: ui };
+    }
+  }
+}
+
+// ─── Public entry point ───────────────────────────────────────────────────────
 
 export async function* generateContentStream(
   messages: Message[],
@@ -454,15 +467,34 @@ export async function* generateContentStream(
     }
   }
 
-  // Gemini first
+  // Groq first — no hard monthly quota, recovers from rate limits automatically
   try {
-    yield* runGeminiStream(contents, query, fileData);
+    const groqStream = runGroqStream(messages, ragContext, overlayContext, query);
+    for await (const chunk of groqStream) {
+      if ('text' in chunk && chunk.text) {
+        yield { text: sanitizeText(chunk.text) };
+      } else {
+        yield chunk;
+      }
+    }
     return;
   } catch (err: any) {
-    if (!is429(err)) throw err;
-    console.warn('[Quinn] Gemini quota exceeded — falling back to Groq');
+    console.warn('[Quinn] Groq unavailable — falling back to Gemini:', String(err).slice(0, 120));
   }
 
-  // Groq fallback (full tool support)
-  yield* runGroqStream(messages, ragContext, overlayContext, query);
+  // Gemini fallback
+  try {
+    for await (const chunk of runGeminiStream(contents, query, fileData)) {
+      if ('text' in chunk && chunk.text) {
+        yield { text: sanitizeText(chunk.text) };
+      } else {
+        yield chunk;
+      }
+    }
+  } catch (err: any) {
+    if (is429(err)) {
+      throw new Error('Service is temporarily busy — please try again in a moment.');
+    }
+    throw err;
+  }
 }

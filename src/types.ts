@@ -5,7 +5,15 @@ export interface SourceRef {
   sectionId: string;
   sectionTitle: string;
   anchor?: string;
-  content?: string; // For highlighting in the UI
+  content?: string;
+}
+
+export interface CitationSource {
+  document: string;
+  section: string;
+  content?: string;
+  docId?: string;
+  sectionId?: string;
 }
 
 export interface Message {
@@ -14,6 +22,7 @@ export interface Message {
   content: string;
   timestamp: Date;
   generativeUI?: GenerativeUIData;
+  sources?: CitationSource[];
   isError?: boolean;
 }
 
