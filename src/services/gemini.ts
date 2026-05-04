@@ -242,6 +242,23 @@ const ALL_FUNCTIONS: FunctionDeclaration[] = [
   renderPricingFunction,
 ];
 
+// ─── Gemini→OpenAI schema converter (Type.OBJECT→"object" etc.) ──────────────
+
+function toOpenAISchema(schema: any): any {
+  if (!schema || typeof schema !== 'object') return schema;
+  const out: any = Array.isArray(schema) ? [] : {};
+  for (const [k, v] of Object.entries(schema)) {
+    if (k === 'type' && typeof v === 'string') {
+      out[k] = v.toLowerCase();
+    } else if (typeof v === 'object' && v !== null) {
+      out[k] = toOpenAISchema(v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 // ─── Shared UI mapper ─────────────────────────────────────────────────────────
 
 function mapToGenerativeUI(name: string, args: any, sourceRef?: SourceRef): GenerativeUIData | undefined {
@@ -315,7 +332,14 @@ async function* runGroqStream(
     },
   ];
 
-  const openAITools = ALL_FUNCTIONS.map(fn => ({ type: 'function', function: fn }));
+  const openAITools = ALL_FUNCTIONS.map(fn => ({
+    type: 'function',
+    function: {
+      name: fn.name,
+      description: fn.description,
+      parameters: toOpenAISchema(fn.parameters),
+    },
+  }));
 
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
