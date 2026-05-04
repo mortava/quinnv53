@@ -439,8 +439,8 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                           : "text-slate-800"
                     )}
                   >
-                    {msg.content && (
-                      <div 
+                    {msg.content && msg.generativeUI?.type !== 'answer' && (
+                      <div
                         className={cn(
                           "text-[16px] leading-relaxed font-sans break-words whitespace-pre-wrap",
                           msg.role === 'model' && !msg.isError && "markdown-body"
@@ -470,10 +470,10 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                       </button>
                     )}
                     {msg.generativeUI && (
-                      <div className="mt-6 w-full">
-                        <GenerativeUI 
-                          ui={msg.generativeUI} 
-                          onOpenPricing={() => setIsPricingOpen(true)} 
+                      <div className={cn("w-full", msg.generativeUI.type !== 'answer' && "mt-6")}>
+                        <GenerativeUI
+                          ui={msg.generativeUI}
+                          onOpenPricing={() => setIsPricingOpen(true)}
                           onOpenSource={(source) => setActiveSource(source)}
                         />
                       </div>

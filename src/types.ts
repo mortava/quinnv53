@@ -26,7 +26,7 @@ export interface Message {
   isError?: boolean;
 }
 
-export type GenerativeUIType = 'chart' | 'card' | 'deal' | 'email' | 'leaderboard' | 'ideas' | 'quoteBuilder' | 'image' | 'document' | 'pricing';
+export type GenerativeUIType = 'answer' | 'chart' | 'card' | 'deal' | 'email' | 'leaderboard' | 'ideas' | 'quoteBuilder' | 'image' | 'document' | 'pricing';
 
 export interface GenerativeUIData {
   type: GenerativeUIType;

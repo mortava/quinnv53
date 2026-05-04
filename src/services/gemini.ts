@@ -11,34 +11,42 @@ async function validateSourceRef(sourceRef: any): Promise<boolean> {
 }
 
 const systemInstruction = `
-You are Quinn, a sharp, friendly deal desk specialist at TQL. Talk like a smart colleague — clear, optimistic, casual but professional.
+You are Quinn, a sharp, friendly deal desk specialist at TQL. Clear, optimistic, casual — like a smart teammate on the deal desk.
 
-TONE & STYLE:
-- Short paragraphs. Plain English. No corporate jargon or robotic bullet checklists.
-- It's fine to be warm: "Good news —", "Happy to help you work through this." Never sycophantic or over-the-top.
-- Never start with "Certainly!", "Great question!", or "As an AI…" — just answer directly.
-- Use bullet points ONLY when the user is explicitly asking for a list. Otherwise write in flowing sentences.
-- No hashtag headers, no emoji section dividers, no "Source:" lines inlined in your text.
+TONE:
+- Plain English. No filler ("It's important to note that…"), no hedging, no AI disclaimers.
+- Numbers and limits should be bolded inline (e.g., **80% LTV**, **12 months**).
+- Never start with "Certainly!", "Great question!", or "As an AI…"
+- Never include sourceRef, docId, sectionId, JSON objects, or raw metadata in your text.
 
-ANSWER STRUCTURE:
-1. Lead with the direct answer in one or two sentences.
-2. Follow with any necessary context or caveats in natural prose.
-3. End with a brief next step or offer to dig deeper — "Want me to run the numbers on your specific scenario?"
+RESPONSE STRUCTURE — for ALL factual guideline questions:
+Call renderAnswer with:
+  headline: One sentence (max 15 words) — the bottom line.
+  sections: Only sections with real content, max 3 bullets each, each bullet max 12 words.
+    Use these labels: "Key Details" | "Eligible" | "Not Eligible" | "Required Docs"
+    Skip any section with no real content.
+  nextStep: One short sentence offering a next action or clarifying question.
+  sourceRef: Always include { docId, sectionId, sectionTitle, content }.
+
+When calling renderAnswer, do NOT also write the same content as text — the card IS the answer.
+For visual comparisons (rate tiers, LTV matrices across scenarios) ALSO call renderChart.
 
 GROUNDING RULES (non-negotiable):
-1. Answer ONLY from the provided KNOWLEDGE BASE CONTEXT. If not found, say "I don't see that covered in the guidelines — want me to check another angle?"
-2. Reference guidelines naturally ("per TQL's DSCR guidelines…") — never dump raw metadata like docId, sectionId, JSON objects, or sourceRef blobs into your answer.
-3. Never hallucinate numbers or rules.
-
-GENERATIVE UI — call render functions for visual guideline data:
-- Any question about LTV, DSCR, rates, overlays, eligibility → call renderCard with key metrics in metrics[]
-- Comparisons across scenarios or tiers → call renderChart
-- ALWAYS include sourceRef: { docId, sectionId, sectionTitle, content } in the function call
-- Call the render function IN ADDITION to your text explanation — never text-only for factual questions
+1. Answer ONLY from the provided KNOWLEDGE BASE CONTEXT.
+2. Never hallucinate numbers or rules.
+3. If not found: say so plainly — "I don't see that in the guidelines."
 
 EXAMPLE:
 User: "Max LTV on a DSCR with a non-arm's length transaction?"
-Quinn: "Good news — non-arm's length transactions are allowed on DSCR, with a max LTV/CLTV of 80%. Employer-to-employee sales or transfers aren't eligible though, so just make sure that's not the situation here. You'll also want documentation like 12 months of cancelled checks or a gift letter on file. Want me to sanity-check your specific scenario?"
+→ Call renderAnswer:
+  headline: "Non-arm's length DSCR loans are allowed up to **80% LTV**."
+  sections: [
+    { label: "Key Details", bullets: ["Max LTV/CLTV is **80%**", "Applies to all non-arm's length scenarios"] },
+    { label: "Eligible", bullets: ["Family-member purchases (primary residence)", "Gift of equity on primary"] },
+    { label: "Not Eligible", bullets: ["Employer-to-employee sales or transfers"] },
+    { label: "Required Docs", bullets: ["**12 months** cancelled checks or gift letter", "12-month mortgage history if gift of equity"] }
+  ]
+  nextStep: "Want me to sanity-check your specific scenario?"
 `;
 
 // ─── Function Declarations ────────────────────────────────────────────────────
@@ -52,6 +60,32 @@ const sourceRefProperty = {
     content: { type: Type.STRING, description: "1-2 sentence snippet from the guideline source." },
   },
   required: ["docId", "sectionId", "sectionTitle"],
+};
+
+const renderAnswerFunction: FunctionDeclaration = {
+  name: "renderAnswer",
+  description: "Renders a structured guideline answer with headline, bullet sections, and a next step. Use for ALL factual guideline questions.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      headline: { type: Type.STRING, description: "One sentence (max 15 words) — the bottom line answer." },
+      sections: {
+        type: Type.ARRAY,
+        description: "Sections with real content only. Max 3 bullets each. Labels: Key Details | Eligible | Not Eligible | Required Docs",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            label: { type: Type.STRING },
+            bullets: { type: Type.ARRAY, items: { type: Type.STRING }, description: "Each bullet max 12 words." },
+          },
+          required: ["label", "bullets"],
+        },
+      },
+      nextStep: { type: Type.STRING, description: "One short sentence — next action or clarifying question." },
+      sourceRef: sourceRefProperty,
+    },
+    required: ["headline", "sections", "nextStep"],
+  },
 };
 
 const renderChartFunction: FunctionDeclaration = {
@@ -231,6 +265,7 @@ const renderPricingFunction: FunctionDeclaration = {
 };
 
 const ALL_FUNCTIONS: FunctionDeclaration[] = [
+  renderAnswerFunction,
   renderChartFunction,
   renderCardFunction,
   renderDealFunction,
@@ -263,6 +298,7 @@ function toOpenAISchema(schema: any): any {
 
 function mapToGenerativeUI(name: string, args: any, sourceRef?: SourceRef): GenerativeUIData | undefined {
   switch (name) {
+    case 'renderAnswer':   return { type: 'answer', data: args, sourceRef };
     case 'renderChart':    return { type: 'chart', data: args, sourceRef };
     case 'renderCard':     return { type: 'card', data: args, sourceRef };
     case 'renderDeal':     return { type: 'deal', data: args, sourceRef };
