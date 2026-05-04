@@ -293,9 +293,9 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#f8fafc] overflow-hidden">
-      {/* Header with Mobile Menu Trigger */}
-      <div className="md:hidden flex items-center p-4 border-b border-slate-100 bg-white">
-        <button onClick={onMenuClick} className="p-2 text-slate-500">
+      {/* Header with Menu Trigger */}
+      <div className="flex items-center p-4 border-b border-slate-100 bg-white">
+        <button onClick={onMenuClick} className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors">
           <Menu size={24} />
         </button>
       </div>
@@ -399,7 +399,7 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
           </div>
         ) : (
           <div className="flex flex-col space-y-12 w-full animate-in fade-in duration-500">
-            {messages.map((msg) => (
+            {messages.map((msg, index) => (
               <div 
                 key={msg.id} 
                 className={cn(
@@ -469,17 +469,17 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                     )}
                   </div>
                   
-                  {msg.role === 'model' && (
+                  {msg.role === 'model' && !msg.isError && !(isLoading && index === messages.length - 1) && (
                     <div className="flex items-center gap-4 mt-2">
-                      <button 
-                        onClick={() => handleCopy(msg.content, msg.id)} 
+                      <button
+                        onClick={() => handleCopy(msg.content, msg.id)}
                         className="text-slate-400 hover:text-navy-600 p-2 rounded-md hover:bg-slate-100 transition-colors"
                         title="Copy response"
                       >
                         {copiedId === msg.id ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
                       </button>
-                      <button 
-                        onClick={() => handleShare(msg.content, msg.id)} 
+                      <button
+                        onClick={() => handleShare(msg.content, msg.id)}
                         className="text-slate-400 hover:text-navy-600 p-2 rounded-md hover:bg-slate-100 transition-colors"
                         title="Share response"
                       >
