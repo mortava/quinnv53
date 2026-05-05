@@ -11,7 +11,7 @@
  *   const chunks = fullAltDocMatrix.chunks; // pass to Gemini embeddings
  */
 
-import type { KnowledgeDocument } from "./knowledge_types";
+import type { KnowledgeDocument } from "./types";
 
 export const fullAltDocMatrix: KnowledgeDocument = {
   metadata: {
