@@ -19,7 +19,7 @@ const navItems = [
 
 const utilItems = [
   { id: 'reset', icon: RefreshCw, label: 'New Session' },
-  { id: 'deal',  icon: Calculator, label: 'Pricer' },
+  { id: 'pricer', icon: Calculator, label: 'Pricer' },
 ];
 
 export function Sidebar({ isOpen, setIsOpen, currentView, onAction }: SidebarProps) {

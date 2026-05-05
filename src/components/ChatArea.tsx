@@ -109,9 +109,10 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
         case 'quote':
           prompt = "Build a dynamic loan quote for a property at 123 Main St, Los Angeles, CA.";
           break;
+        case 'pricer':
         case 'deal':
-          prompt = "Help me create a new deal pipeline.";
-          break;
+          setIsPricingOpen(true);
+          return;
         case 'email':
           prompt = "Help me build a professional email draft.";
           break;
