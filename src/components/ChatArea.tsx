@@ -303,12 +303,24 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#f8fafc] overflow-hidden">
-      {/* Header with Menu Trigger */}
-      <div className="flex items-center p-4 border-b border-slate-100 bg-white">
-        <button onClick={onMenuClick} className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-colors">
-          <Menu size={24} />
+    <div className="flex-1 flex flex-col h-full bg-[#F5F5F0] overflow-hidden">
+      {/* Top bar */}
+      <div className="flex items-center justify-between h-14 px-5 border-b border-black/5 bg-[#F5F5F0] shrink-0">
+        {/* Hamburger — mobile only */}
+        <button onClick={onMenuClick} className="md:hidden p-1.5 text-black/40 hover:text-black transition-colors rounded-md">
+          <Menu size={20} />
         </button>
+        {/* Breadcrumb */}
+        <div className="hidden md:flex items-center gap-2">
+          <span className="text-[12px] font-bold text-black/25 uppercase tracking-widest">Quinn</span>
+          <span className="text-[12px] text-black/15">/</span>
+          <span className="text-[12px] font-bold text-black/50 uppercase tracking-widest">Deal Desk</span>
+        </div>
+        {/* Status pill */}
+        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-black/5">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#245F73] animate-pulse" />
+          <span className="text-[10px] font-bold text-black/40 uppercase tracking-widest">Active</span>
+        </div>
       </div>
       
       {/* Messages / Hero Area */}
@@ -327,10 +339,11 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center animate-in fade-in duration-700">
             {/* Logo/Title */}
-            <div className="relative mb-6">
-              <h1 className="text-[80px] leading-[89px] font-serif font-medium text-[#3CCFA8] tracking-tight">Quinn</h1>
+            <div className="relative mb-4">
+              <p className="text-[11px] font-bold text-[#245F73] uppercase tracking-[0.3em] mb-3 text-center">Total Quality Lending</p>
+              <h1 className="text-[64px] leading-[1] font-bold text-black tracking-tight text-center">Quinn</h1>
             </div>
-            <h1 className="text-[20px] font-sans leading-[22px] font-medium text-slate-500 mb-8 tracking-tight text-center">Let's make something special happen today.</h1>
+            <h1 className="text-[15px] font-sans leading-[22px] font-medium text-black/40 mb-8 tracking-tight text-center">NonQM Deal Desk · Ask anything about guidelines, pricing, or structuring.</h1>
             
             {/* Centered Input Area */}
             <div className="w-full mb-6">
@@ -364,7 +377,7 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                   </div>
                 </div>
               )}
-              <div className="relative bg-white border border-slate-200 rounded-[2rem] shadow-sm focus-within:ring-2 focus-within:ring-navy-500/10 focus-within:border-navy-200 transition-all min-h-[120px] flex flex-col">
+              <div className="relative bg-white border border-black/8 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-[#245F73]/20 focus-within:border-[#245F73]/30 transition-all min-h-[120px] flex flex-col">
                 <textarea
                   ref={heroInputRef}
                   value={input}
@@ -394,7 +407,7 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                   <button
                     onClick={() => handleSend()}
                     disabled={(!input.trim() && !selectedFile) || isLoading}
-                    className="h-10 w-10 flex-shrink-0 bg-[#9cb2bc] hover:bg-[#8ba3ad] disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95"
+                    className="h-10 w-10 flex-shrink-0 bg-[#245F73] hover:bg-[#1d4f60] disabled:bg-black/8 disabled:text-black/20 disabled:cursor-not-allowed text-white rounded-lg flex items-center justify-center transition-all shadow-sm active:scale-95"
                   >
                     <ArrowUp size={20} strokeWidth={3} className="rotate-90" />
                   </button>
@@ -405,44 +418,42 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
             </div>
 
             <div className="text-center mt-4">
-              <span className="text-[10px] text-slate-400 font-medium">Powered by Total Intelligence</span>
+              <span className="text-[10px] text-black/25 font-medium uppercase tracking-widest">Powered by Total Intelligence</span>
             </div>
           </div>
         ) : (
-          <div className="flex flex-col space-y-12 w-full animate-in fade-in duration-500">
+          <div className="flex flex-col space-y-10 w-full animate-in fade-in duration-500">
             {messages.map((msg, index) => (
-              <div 
-                key={msg.id} 
+              <div
+                key={msg.id}
                 className={cn(
                   "flex w-full gap-4 max-w-full",
                   msg.role === 'user' ? "justify-end" : "justify-start"
                 )}
               >
-                {msg.role === 'model' ? (
-                  <div className="hidden md:flex flex-col items-center shrink-0 mt-2">
-                    <div className="w-1.5 h-1.5 bg-slate-300 rounded-full" />
-                  </div>
-                ) : null}
-                
                 <div className={cn(
-                  "flex flex-col gap-2 relative transition-all",
-                  msg.role === 'user' ? "max-w-xl" : "w-full flex-1 min-w-0"
+                  "flex flex-col gap-1.5 relative transition-all",
+                  msg.role === 'user' ? "max-w-xl items-end" : "w-full flex-1 min-w-0"
                 )}>
-                  <div 
+                  {/* Role label */}
+                  {msg.role === 'model' && (
+                    <span className="text-[10px] font-bold text-[#245F73] uppercase tracking-widest mb-0.5">Quinn</span>
+                  )}
+                  <div
                     id={`message-content-${msg.id}`}
                     className={cn(
-                      "px-0 py-0 w-full",
-                      msg.role === 'user' 
-                        ? "text-slate-900 text-right font-medium" 
+                      "w-full",
+                      msg.role === 'user'
+                        ? "bg-white border border-black/8 rounded-xl px-4 py-3 text-[14px] font-medium text-black/80 text-right shadow-sm"
                         : msg.isError
-                          ? "bg-red-50 text-red-800 border border-red-100 rounded-2xl p-4"
-                          : "text-slate-800"
+                          ? "bg-red-50 text-red-800 border border-red-100 rounded-xl p-4"
+                          : "text-black/80"
                     )}
                   >
                     {msg.content && msg.generativeUI?.type !== 'answer' && (
                       <div
                         className={cn(
-                          "text-[16px] leading-relaxed font-sans break-words whitespace-pre-wrap",
+                          "text-[15px] leading-relaxed font-sans break-words whitespace-pre-wrap",
                           msg.role === 'model' && !msg.isError && "markdown-body"
                         )}
                       >
@@ -493,7 +504,7 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                                 sectionTitle: source.section,
                                 content: source.content,
                               })}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 text-slate-500 text-[11px] font-medium rounded-full hover:bg-teal-50 hover:border-teal-200 hover:text-teal-700 transition-colors cursor-pointer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white border border-black/8 text-black/40 text-[10px] font-bold uppercase tracking-wide rounded-md hover:bg-[#245F73]/5 hover:border-[#245F73]/20 hover:text-[#245F73] transition-colors cursor-pointer"
                             >
                               <FileText size={10} />
                               {source.section}
@@ -501,20 +512,20 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                           ))}
                         </div>
                       )}
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleCopy(msg.content, msg.id)}
-                          className="text-slate-400 hover:text-navy-600 p-2 rounded-md hover:bg-slate-100 transition-colors"
+                          className="text-black/25 hover:text-black/60 p-1.5 rounded-md hover:bg-black/5 transition-colors"
                           title="Copy response"
                         >
-                          {copiedId === msg.id ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                          {copiedId === msg.id ? <Check size={14} className="text-[#245F73]" /> : <Copy size={14} />}
                         </button>
                         <button
                           onClick={() => handleShare(msg.content, msg.id)}
-                          className="text-slate-400 hover:text-navy-600 p-2 rounded-md hover:bg-slate-100 transition-colors"
+                          className="text-black/25 hover:text-black/60 p-1.5 rounded-md hover:bg-black/5 transition-colors"
                           title="Share response"
                         >
-                          <Share2 size={16} />
+                          <Share2 size={14} />
                         </button>
                       </div>
                     </div>
@@ -579,19 +590,14 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
             {showScrollDown && (
               <button
                 onClick={() => scrollToBottom()}
-                className="absolute bottom-24 right-6 p-2.5 bg-white shadow-xl rounded-full border border-slate-200 text-slate-500 hover:text-navy-600 hover:bg-slate-50 transition-all z-10 animate-in fade-in zoom-in"
+                className="absolute bottom-24 right-6 p-2.5 bg-white shadow-xl rounded-lg border border-black/8 text-black/40 hover:text-black/70 hover:bg-black/5 transition-all z-10 animate-in fade-in zoom-in"
               >
                 <ChevronDown size={20} />
               </button>
             )}
 
-            {/* Label */}
-            <div className="px-5 flex items-center">
-              <span className="text-[13px] font-bold text-slate-800 tracking-tight">Quinn | Deal Desk</span>
-            </div>
-
-            {/* Input Bubble */}
-            <div className="relative bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200/60 p-2 transition-all focus-within:shadow-[0_4px_20px_rgb(0,0,0,0.06)] focus-within:border-slate-300 transform-gpu">
+            {/* Input Panel */}
+            <div className="relative bg-white rounded-xl shadow-sm border border-black/8 p-2 transition-all focus-within:ring-2 focus-within:ring-[#245F73]/15 focus-within:border-[#245F73]/25 transform-gpu">
               {/* File Staging / Progress UI */}
               {(selectedFile || isStaging) && (
                 <div className="px-4 pt-2 pb-1">
@@ -635,23 +641,23 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                       className="hidden" 
                       accept=".pdf,.doc,.docx,.txt,.csv"
                     />
-                    <button 
+                    <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="p-3 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-all"
+                      className="p-2.5 text-black/30 hover:text-black/70 hover:bg-black/5 rounded-lg transition-all"
                     >
-                      <Plus size={20} strokeWidth={2.5} />
+                      <Plus size={18} strokeWidth={2} />
                     </button>
-                    <button 
+                    <button
                       onClick={resetChat}
-                      className="p-3 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-all"
+                      className="p-2.5 text-black/30 hover:text-black/70 hover:bg-black/5 rounded-lg transition-all"
                     >
-                      <RefreshCw size={18} strokeWidth={2.5} />
+                      <RefreshCw size={16} strokeWidth={2} />
                     </button>
-                    <button 
+                    <button
                       onClick={() => setIsPricingOpen(true)}
-                      className="p-3 text-slate-400 hover:text-navy-600 hover:bg-slate-50 rounded-full transition-all"
+                      className="p-2.5 text-black/30 hover:text-black/70 hover:bg-black/5 rounded-lg transition-all"
                     >
-                      <Calculator size={18} strokeWidth={2.5} />
+                      <Calculator size={16} strokeWidth={2} />
                     </button>
                   </div>
 
@@ -660,13 +666,13 @@ export const ChatArea = forwardRef<ChatAreaHandle, ChatAreaProps>(({ onMenuClick
                     onClick={() => handleSend()}
                     disabled={(!input.trim() && !selectedFile) || isLoading}
                     className={cn(
-                      "w-11 h-11 rounded-full flex items-center justify-center transition-all shadow-sm active:scale-95",
-                      (input.trim() || selectedFile) 
-                        ? "bg-slate-50 text-slate-400 hover:bg-navy-900 hover:text-white" 
-                        : "bg-slate-50 text-slate-200 cursor-not-allowed"
+                      "w-10 h-10 rounded-lg flex items-center justify-center transition-all shadow-sm active:scale-95",
+                      (input.trim() || selectedFile)
+                        ? "bg-[#245F73] text-white hover:bg-[#1d4f60]"
+                        : "bg-black/5 text-black/20 cursor-not-allowed"
                     )}
                   >
-                    <ArrowUp size={20} className={cn(isLoading && "animate-bounce")} />
+                    <ArrowUp size={18} className={cn(isLoading && "animate-bounce")} />
                   </button>
                 </div>
               </div>

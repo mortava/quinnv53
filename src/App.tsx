@@ -37,26 +37,8 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-full bg-white overflow-hidden font-sans">
-      <main className="flex-1 h-full relative overflow-hidden flex flex-col">
-        {currentView === 'chat' ? (
-          <ChatArea 
-            ref={chatAreaRef}
-            onMenuClick={() => setIsSidebarOpen(true)} 
-          />
-        ) : (
-          <QuoteBuilder onClose={() => setCurrentView('chat')} />
-        )}
-      </main>
-
-      {/* Sidebar Backdrop */}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 z-30 animate-in fade-in"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
+    <div className="flex h-screen w-full overflow-hidden font-sans bg-[#F5F5F0]">
+      {/* Persistent sidebar — always visible md+ */}
       <Sidebar
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
@@ -64,6 +46,26 @@ export default function App() {
         onOpenOnboarding={() => setShowOnboarding(true)}
         onAction={handleAction}
       />
+
+      {/* Mobile sidebar backdrop */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 md:hidden animate-in fade-in"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Main content */}
+      <main className="flex-1 h-full relative overflow-hidden flex flex-col min-w-0">
+        {currentView === 'chat' ? (
+          <ChatArea
+            ref={chatAreaRef}
+            onMenuClick={() => setIsSidebarOpen(true)}
+          />
+        ) : (
+          <QuoteBuilder onClose={() => setCurrentView('chat')} />
+        )}
+      </main>
     </div>
   );
 }

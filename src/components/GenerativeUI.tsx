@@ -57,35 +57,35 @@ function BoldMarkdown({ text }: { text: string }) {
 }
 
 const SECTION_DOT: Record<string, string> = {
-  'Key Details': 'bg-slate-300',
-  'Eligible': 'bg-emerald-400',
+  'Key Details': 'bg-black/25',
+  'Eligible': 'bg-[#245F73]',
   'Not Eligible': 'bg-red-400',
-  'Required Docs': 'bg-amber-400',
+  'Required Docs': 'bg-black/40',
 };
 
 function AnswerUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: SourceRef; onOpenSource?: (s: SourceRef) => void }) {
   const { headline, sections, nextStep } = data;
   return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm w-full overflow-hidden font-sans text-left animate-in fade-in duration-300">
+    <div className="bg-white rounded-xl border border-black/8 shadow-sm w-full overflow-hidden font-sans text-left animate-in fade-in duration-300">
       <div className="px-5 pt-5 pb-4">
-        <p className="text-[15px] font-bold text-slate-900 leading-snug">
+        <p className="text-[15px] font-bold text-black/85 leading-snug">
           <BoldMarkdown text={headline || ''} />
         </p>
       </div>
 
       {sections && sections.length > 0 && (
-        <div className="px-5 pb-4 space-y-4 border-t border-slate-50 pt-4">
+        <div className="px-5 pb-4 space-y-4 border-t border-black/5 pt-4">
           {sections.map((section: any, i: number) => (
             <div key={i}>
               <div className="flex items-center gap-1.5 mb-2">
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${SECTION_DOT[section.label] || 'bg-slate-300'}`} />
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{section.label}</p>
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${SECTION_DOT[section.label] || 'bg-black/20'}`} />
+                <p className="text-[10px] font-black text-black/30 uppercase tracking-widest">{section.label}</p>
               </div>
               <ul className="space-y-1.5 pl-3">
                 {(section.bullets || []).map((bullet: string, j: number) => (
                   <li key={j} className="flex gap-2 items-start">
-                    <span className="w-1 h-1 rounded-full bg-slate-200 mt-[7px] shrink-0" />
-                    <span className="text-[13px] text-slate-700 leading-snug">
+                    <span className="w-1 h-1 rounded-full bg-black/15 mt-[7px] shrink-0" />
+                    <span className="text-[13px] text-black/70 leading-snug">
                       <BoldMarkdown text={bullet} />
                     </span>
                   </li>
@@ -97,8 +97,8 @@ function AnswerUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: So
       )}
 
       {nextStep && (
-        <div className="px-5 py-3 border-t border-slate-50">
-          <p className="text-[12px] text-slate-400 italic">{nextStep}</p>
+        <div className="px-5 py-3 border-t border-black/5">
+          <p className="text-[12px] text-black/35 italic">{nextStep}</p>
         </div>
       )}
 
@@ -106,7 +106,7 @@ function AnswerUI({ data, sourceRef, onOpenSource }: { data: any; sourceRef?: So
         <div className="px-5 pb-4">
           <button
             onClick={() => onOpenSource?.(sourceRef)}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 border border-slate-200 text-slate-500 text-[11px] font-medium rounded-full hover:bg-teal-50 hover:border-teal-200 hover:text-teal-700 transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-black/3 border border-black/8 text-black/40 text-[10px] font-bold uppercase tracking-wide rounded-md hover:bg-[#245F73]/5 hover:border-[#245F73]/20 hover:text-[#245F73] transition-colors"
           >
             <FileText size={10} />
             {sourceRef.docId} · {sourceRef.sectionTitle}
