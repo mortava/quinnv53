@@ -329,7 +329,7 @@ function sanitizeText(text: string): string {
 // ─── Model config ─────────────────────────────────────────────────────────────
 
 const CHAT_MODEL = (process.env.VITE_GEMINI_CHAT_MODEL as string) || 'gemini-2.0-flash';
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'llama-3.1-8b-instant';
 
 function is429(err: any): boolean {
   return (
@@ -379,6 +379,7 @@ async function* runGroqStream(
 
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
+    signal: AbortSignal.timeout(25000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
@@ -389,7 +390,7 @@ async function* runGroqStream(
       tools: openAITools,
       tool_choice: 'auto',
       stream: true,
-      max_tokens: 2048,
+      max_tokens: 1500,
     }),
   });
 
@@ -509,25 +510,30 @@ export async function* generateContentStream(
     ? `OVERLAY GUIDELINES (FINAL SOURCE OF TRUTH):\n${JSON.stringify(overrides, null, 2)}`
     : "";
 
-  const contents: any[] = messages.map(msg => ({
-    role: msg.role === 'user' ? 'user' : 'model',
-    parts: [{ text: msg.content }],
-  }));
-
-  if (contents.length > 0) {
-    const last = contents[contents.length - 1];
-    if (last.role === 'user') {
-      last.parts = [{
-        text: [
-          overlayContext,
-          `KNOWLEDGE BASE CONTEXT:\n${ragContext}`,
-          `USER QUERY: ${query}`,
-        ].filter(Boolean).join('\n\n'),
-      }];
+  // Document analysis: use Gemini (multimodal). All other queries: Groq only.
+  if (fileData) {
+    const contents: any[] = messages.map(msg => ({
+      role: msg.role === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.content }],
+    }));
+    if (contents.length > 0) {
+      const last = contents[contents.length - 1];
+      if (last.role === 'user') {
+        last.parts = [{ text: [overlayContext, `KNOWLEDGE BASE CONTEXT:\n${ragContext}`, `USER QUERY: ${query}`].filter(Boolean).join('\n\n') }];
+      }
     }
+    try {
+      for await (const chunk of runGeminiStream(contents, query, fileData)) {
+        if ('text' in chunk && chunk.text) yield { text: sanitizeText(chunk.text) };
+        else yield chunk;
+      }
+    } catch {
+      throw new Error('Document analysis unavailable — please try again.');
+    }
+    return;
   }
 
-  // Groq first — no hard monthly quota, recovers from rate limits automatically
+  // All text queries → Groq (llama-3.1-8b-instant, ~750 tok/s)
   try {
     const groqStream = runGroqStream(messages, ragContext, overlayContext, query);
     for await (const chunk of groqStream) {
@@ -537,24 +543,14 @@ export async function* generateContentStream(
         yield chunk;
       }
     }
-    return;
   } catch (err: any) {
-    console.warn('[Quinn] Groq unavailable — falling back to Gemini:', String(err).slice(0, 120));
-  }
-
-  // Gemini fallback
-  try {
-    for await (const chunk of runGeminiStream(contents, query, fileData)) {
-      if ('text' in chunk && chunk.text) {
-        yield { text: sanitizeText(chunk.text) };
-      } else {
-        yield chunk;
-      }
+    const msg = String(err);
+    if (msg.includes('AbortError') || msg.includes('timeout')) {
+      throw new Error('Request timed out — Groq may be busy. Try again.');
     }
-  } catch (err: any) {
-    if (is429(err)) {
-      throw new Error('Service is temporarily busy — please try again in a moment.');
+    if (msg.includes('429') || msg.includes('rate_limit')) {
+      throw new Error('Rate limit hit — wait a moment and try again.');
     }
-    throw err;
+    throw new Error(`Quinn error: ${msg.slice(0, 100)}`);
   }
 }
