@@ -296,7 +296,41 @@ function toOpenAISchema(schema: any): any {
 
 // ─── Shared UI mapper ─────────────────────────────────────────────────────────
 
-function mapToGenerativeUI(name: string, args: any, sourceRef?: SourceRef): GenerativeUIData | undefined {
+/**
+ * Cerebras llama3.1-8b sometimes double-stringifies array/object fields in
+ * tool-call arguments — e.g. it returns {"data": "[{\"name\":...}]"} instead
+ * of {"data": [{"name":...}]}. The downstream UI then tries `data.map(...)`
+ * and throws TypeError. This walks the args and parses any string that looks
+ * like JSON, recursively, so the UI always sees real arrays/objects.
+ */
+function coerceJsonStrings(value: unknown): unknown {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (
+      (trimmed.startsWith('[') && trimmed.endsWith(']')) ||
+      (trimmed.startsWith('{') && trimmed.endsWith('}'))
+    ) {
+      try {
+        return coerceJsonStrings(JSON.parse(trimmed));
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map(coerceJsonStrings);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = coerceJsonStrings(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+function mapToGenerativeUI(name: string, rawArgs: unknown, sourceRef?: SourceRef): GenerativeUIData | undefined {
+  const args = coerceJsonStrings(rawArgs) as any;
   switch (name) {
     case 'renderAnswer':   return { type: 'answer', data: args, sourceRef };
     case 'renderChart':    return { type: 'chart', data: args, sourceRef };
