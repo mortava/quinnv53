@@ -18,6 +18,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { generateContentStream } from '../services/gemini';
 import type { Message, GenerativeUIData, CitationSource } from '../types';
 import { GenerativeUI } from './GenerativeUI';
+import AdminPanel from './AdminPanel';
+import { getSessionId, logChatTurn, logSearch } from '../lib/supabase';
 
 /* ---------- Responsive helper ---------- */
 const MOBILE_BREAKPOINT = 768;
@@ -116,7 +118,8 @@ type IconName =
   | 'list'
   | 'moreH'
   | 'trendUp'
-  | 'trendDown';
+  | 'trendDown'
+  | 'sparkle';
 
 interface IconProps {
   name: IconName;
@@ -277,6 +280,7 @@ function Icon({ name, size = 16, stroke = 1.6, style }: IconProps) {
         <polyline points="16 17 22 17 22 11" />
       </>
     ),
+    sparkle: <path d="M12 3 14 9l6 2-6 2-2 6-2-6-6-2 6-2 2-6z" />,
   };
   return <svg {...common}>{paths[name]}</svg>;
 }
@@ -1161,7 +1165,7 @@ function Composer({ onSend, busy, onStop }: ComposerProps) {
             handleSend();
           }
         }}
-        placeholder="Ask Quinn anything"
+        placeholder="Let's get going..."
         rows={1}
         style={{
           width: '100%',
@@ -1353,13 +1357,13 @@ interface EmptyStateProps {
   isMobile?: boolean;
 }
 
-function EmptyState({ onPrompt, isMobile = false }: EmptyStateProps) {
+function EmptyState({ onPrompt: _onPrompt, isMobile = false }: EmptyStateProps) {
   return (
     <div
       style={{
-        maxWidth: 680,
+        maxWidth: 720,
         margin: '0 auto',
-        padding: isMobile ? '32px 16px 16px' : '64px 24px 32px',
+        padding: isMobile ? '48px 20px 16px' : '120px 24px 32px',
         textAlign: 'center',
       }}
     >
@@ -1381,306 +1385,288 @@ function EmptyState({ onPrompt, isMobile = false }: EmptyStateProps) {
       <h1
         style={{
           fontFamily: FONT_DISPLAY,
-          fontSize: isMobile ? 26 : 36,
+          fontSize: isMobile ? 28 : 44,
           fontWeight: 500,
-          lineHeight: 1.15,
+          lineHeight: 1.1,
+          letterSpacing: '-0.01em',
           color: T.ink,
           margin: '0 0 12px',
         }}
       >
-        The deal desk that types back.
+        Welcome to the Future of Lending
       </h1>
       <p
         style={{
           fontFamily: FONT_BODY,
-          fontSize: 16,
+          fontSize: isMobile ? 14 : 16,
           lineHeight: 1.5,
           color: T.body,
-          margin: '0 auto 48px',
-          maxWidth: 520,
+          margin: '0 auto',
+          maxWidth: 560,
         }}
       >
-        Run Scenarios, Access Pricing, Create Quotes, Access your Approved Files
-        all without leaving this Workspace.
+        Run deals. Price loans. Build quotes. Close faster. Powered by Quinn AI.
       </p>
-      <div style={{ textAlign: 'left', maxWidth: 560, margin: '0 auto' }}>
-        <div
-          style={{
-            fontFamily: FONT_BODY,
-            fontSize: 12,
-            fontWeight: 500,
-            color: T.mute,
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-            marginBottom: 12,
-            paddingLeft: 4,
-          }}
-        >
-          Try one of these
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {STARTERS.map((s, i) => (
-            <button
-              type="button"
-              key={i}
-              onClick={() => onPrompt(s.prompt)}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = T.surfaceSoft;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-                padding: '14px 16px',
-                borderRadius: 12,
-                background: 'transparent',
-                border: 0,
-                borderBottom:
-                  i < STARTERS.length - 1 ? `1px solid ${T.hairline}` : '0',
-                textAlign: 'left',
-                cursor: 'pointer',
-                color: T.ink,
-                transition: 'background .15s',
-                fontFamily: FONT_BODY,
-              }}
-            >
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 9999,
-                  background: T.surfaceSoft,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: T.ink,
-                  flexShrink: 0,
-                }}
-              >
-                <Icon name={s.icon} size={13} stroke={1.6} />
-              </div>
-              <span
-                style={{
-                  flex: 1,
-                  fontSize: 15,
-                  color: T.ink,
-                  fontWeight: 500,
-                }}
-              >
-                {s.title}
-              </span>
-              <span
-                style={{
-                  fontSize: 13,
-                  color: T.body,
-                  fontFamily: FONT_MONO,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  maxWidth: 280,
-                }}
-              >
-                {s.prompt}
-              </span>
-              <Icon name="arrowRight" size={14} stroke={1.6} style={{ color: T.mute }} />
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
 
 /* ---------- Sidebar ---------- */
-interface SidebarProps {
-  onNew: () => void;
-  open: boolean;
-  onClose: () => void;
+interface SidebarNavItem {
+  icon: IconName;
+  label: string;
+  prompt?: string;
 }
 
-function Sidebar({ onNew, open, onClose }: SidebarProps) {
+const NAV_ITEMS: SidebarNavItem[] = [
+  { icon: 'calc', label: 'Price a Loan', prompt: "I'd like to price a loan." },
+  { icon: 'database', label: 'My Loans', prompt: "Show me my loan pipeline." },
+  { icon: 'fileText', label: 'Build Quote', prompt: "Help me build a quote." },
+  { icon: 'book', label: 'Docs' },
+  { icon: 'sparkle', label: 'Marketing' },
+];
+
+interface SidebarProps {
+  onNew: () => void;
+  expanded: boolean;
+  onAction?: (prompt: string) => void;
+}
+
+function Sidebar({ onNew, expanded, onAction }: SidebarProps) {
   return (
     <aside
       style={{
-        width: 264,
+        width: '100%',
+        height: '100%',
         background: T.canvas,
         borderRight: `1px solid ${T.hairline}`,
         display: 'flex',
         flexDirection: 'column',
         flexShrink: 0,
-        transform: open ? 'translateX(0)' : 'translateX(-100%)',
-        transition: 'transform .25s',
       }}
     >
+      {/* Header — Workspace label */}
       <div
         style={{
-          height: 64,
-          padding: '0 20px',
+          height: 60,
+          padding: expanded ? '0 20px' : '0',
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
+          justifyContent: expanded ? 'flex-start' : 'center',
           borderBottom: `1px solid ${T.hairline}`,
         }}
       >
-        <QuinnMark size={20} />
-        <div
-          style={{
-            flex: 1,
-            fontFamily: FONT_DISPLAY,
-            fontSize: 17,
-            fontWeight: 600,
-            color: T.ink,
-          }}
-        >
-          Quinn
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          title="Hide"
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 9999,
-            background: 'transparent',
-            border: 0,
-            color: T.body,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = T.surfaceSoft;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-          }}
-        >
-          <Icon name="list" size={14} stroke={1.6} />
-        </button>
-      </div>
-      <div style={{ padding: '16px 16px 8px' }}>
-        <PillButton
-          variant="primary"
-          icon="plus"
-          size="md"
-          onClick={onNew}
-          style={{ width: '100%' }}
-        >
-          New conversation
-        </PillButton>
-      </div>
-      <div style={{ padding: '8px 16px 16px' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            height: 36,
-            padding: '0 14px',
-            borderRadius: 9999,
-            background: T.surfaceSoft,
-            color: T.body,
-          }}
-        >
-          <Icon name="search" size={13} stroke={1.6} />
-          <input
-            placeholder="Search threads"
-            style={{
-              flex: 1,
-              border: 0,
-              outline: 0,
-              background: 'transparent',
-              fontFamily: FONT_BODY,
-              fontSize: 13,
-              color: T.ink,
-            }}
-          />
-        </div>
-      </div>
-      <div
-        style={{ flex: 1, overflowY: 'auto', padding: '0 8px 8px' }}
-        className="qp-scroll"
-      >
-        <div
-          style={{
-            padding: '32px 20px',
-            textAlign: 'center',
-            color: T.mute,
-            fontFamily: FONT_BODY,
-            fontSize: 13,
-            lineHeight: 1.5,
-          }}
-        >
-          No conversations yet.
-          <br />
-          Start one to see it here.
-        </div>
-      </div>
-      <div
-        style={{
-          padding: '12px 16px',
-          borderTop: `1px solid ${T.hairline}`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-        }}
-      >
-        <div
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 9999,
-            background: T.surfaceSoft,
-            color: T.charcoal,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            border: `1px solid ${T.hairline}`,
-          }}
-        >
-          <Icon name="lock" size={12} stroke={1.6} />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        {expanded ? (
           <div
             style={{
-              fontSize: 13,
+              fontFamily: FONT_DISPLAY,
+              fontSize: 16,
+              fontWeight: 600,
               color: T.ink,
-              fontWeight: 500,
-              fontFamily: FONT_BODY,
             }}
           >
-            OPEN ACCESS
+            Workspace
           </div>
-        </div>
-        <button
-          type="button"
-          title="Settings"
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = T.surfaceSoft;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-          }}
+        ) : (
+          <QuinnMark size={20} />
+        )}
+      </div>
+
+      {/* + New Thread */}
+      <div style={{ padding: expanded ? '14px 14px 6px' : '14px 8px 6px' }}>
+        {expanded ? (
+          <PillButton
+            variant="primary"
+            icon="plus"
+            size="md"
+            onClick={onNew}
+            style={{ width: '100%' }}
+          >
+            New Thread
+          </PillButton>
+        ) : (
+          <button
+            type="button"
+            onClick={onNew}
+            title="New Thread"
+            aria-label="New Thread"
+            style={{
+              width: '100%',
+              height: 38,
+              borderRadius: 9999,
+              background: T.ink,
+              color: T.canvas,
+              border: 0,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name="plus" size={16} stroke={2} />
+          </button>
+        )}
+      </div>
+
+      {/* Search */}
+      <div style={{ padding: expanded ? '6px 14px 12px' : '6px 8px 12px' }}>
+        {expanded ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              height: 34,
+              padding: '0 12px',
+              borderRadius: 9999,
+              background: T.surfaceSoft,
+              color: T.body,
+            }}
+          >
+            <Icon name="search" size={13} stroke={1.6} />
+            <input
+              placeholder="Search Threads"
+              style={{
+                flex: 1,
+                border: 0,
+                outline: 0,
+                background: 'transparent',
+                fontFamily: FONT_BODY,
+                fontSize: 13,
+                color: T.ink,
+              }}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            title="Search Threads"
+            aria-label="Search Threads"
+            style={{
+              width: '100%',
+              height: 34,
+              borderRadius: 9999,
+              background: T.surfaceSoft,
+              border: 0,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: T.body,
+            }}
+          >
+            <Icon name="search" size={14} stroke={1.6} />
+          </button>
+        )}
+      </div>
+
+      {/* Workspace nav */}
+      <nav
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: expanded ? '8px 8px' : '8px 8px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+        }}
+        className="qp-scroll"
+      >
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.label}
+            type="button"
+            title={item.label}
+            aria-label={item.label}
+            onClick={() => item.prompt && onAction?.(item.prompt)}
+            onMouseEnter={(e) => (e.currentTarget.style.background = T.surfaceSoft)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: expanded ? '8px 12px' : '0',
+              height: expanded ? 'auto' : 38,
+              minHeight: 36,
+              justifyContent: expanded ? 'flex-start' : 'center',
+              background: 'transparent',
+              border: 0,
+              borderRadius: 8,
+              cursor: 'pointer',
+              color: T.charcoal,
+              fontFamily: FONT_BODY,
+              fontSize: 13.5,
+              transition: 'background .15s',
+            }}
+          >
+            <Icon name={item.icon} size={15} stroke={1.6} />
+            {expanded && <span style={{ flex: 1, textAlign: 'left' }}>{item.label}</span>}
+          </button>
+        ))}
+      </nav>
+
+      {/* Footer: data trust + access pill */}
+      <div
+        style={{
+          padding: expanded ? '12px 14px' : '12px 8px',
+          borderTop: `1px solid ${T.hairline}`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+        }}
+      >
+        {expanded && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              borderRadius: 9999,
+              background: T.surfaceSoft,
+              color: T.charcoal,
+              fontSize: 11.5,
+              fontFamily: FONT_BODY,
+              alignSelf: 'flex-start',
+            }}
+          >
+            <Icon name="lock" size={11} stroke={1.6} />
+            Your data stays yours
+          </div>
+        )}
+        <div
           style={{
-            width: 30,
-            height: 30,
-            borderRadius: 9999,
-            border: 0,
-            background: 'transparent',
-            color: T.body,
-            cursor: 'pointer',
-            display: 'inline-flex',
+            display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
+            gap: 10,
+            justifyContent: expanded ? 'flex-start' : 'center',
           }}
         >
-          <Icon name="moreH" size={14} stroke={2} />
-        </button>
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 9999,
+              background: T.surfaceSoft,
+              color: T.charcoal,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: `1px solid ${T.hairline}`,
+              flexShrink: 0,
+            }}
+          >
+            <Icon name="lock" size={11} stroke={1.6} />
+          </div>
+          {expanded && (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: T.ink, fontWeight: 600, fontFamily: FONT_BODY }}>
+                OPEN ACCESS
+              </div>
+              <div style={{ fontSize: 10.5, color: T.mute, fontFamily: FONT_MONO }}>v6</div>
+            </div>
+          )}
+        </div>
       </div>
     </aside>
   );
@@ -1689,12 +1675,12 @@ function Sidebar({ onNew, open, onClose }: SidebarProps) {
 /* ---------- Top bar ---------- */
 interface TopBarProps {
   onToggleSidebar: () => void;
-  sidebarOpen: boolean;
-  onNew: () => void;
+  sidebarExpanded: boolean;
+  onLoginClick: () => void;
   isMobile?: boolean;
 }
 
-function TopBar({ onToggleSidebar, sidebarOpen, onNew, isMobile = false }: TopBarProps) {
+function TopBar({ onToggleSidebar, sidebarExpanded, onLoginClick, isMobile = false }: TopBarProps) {
   return (
     <div
       style={{
@@ -1702,91 +1688,68 @@ function TopBar({ onToggleSidebar, sidebarOpen, onNew, isMobile = false }: TopBa
         padding: isMobile ? '0 12px' : '0 24px',
         display: 'flex',
         alignItems: 'center',
-        gap: isMobile ? 10 : 16,
+        gap: isMobile ? 10 : 14,
         borderBottom: `1px solid ${T.hairline}`,
         background: T.canvas,
         flexShrink: 0,
       }}
     >
-      {(isMobile || !sidebarOpen) && (
-        <button
-          type="button"
-          onClick={onToggleSidebar}
-          aria-label="Open menu"
-          onMouseEnter={(e) => (e.currentTarget.style.background = T.surfaceSoft)}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 9999,
-            border: 0,
-            background: 'transparent',
-            color: T.ink,
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <Icon name="list" size={18} stroke={1.6} />
-        </button>
-      )}
-      <div
-        style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: isMobile ? 1 : 'initial' }}
+      {/* Expand/collapse sidebar toggle (always visible) */}
+      <button
+        type="button"
+        onClick={onToggleSidebar}
+        aria-label={sidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+        title={sidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+        onMouseEnter={(e) => (e.currentTarget.style.background = T.surfaceSoft)}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 9999,
+          border: 0,
+          background: 'transparent',
+          color: T.ink,
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
       >
+        <Icon name="list" size={18} stroke={1.6} />
+      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
+        <QuinnMark size={20} />
         <div
           style={{
             fontFamily: FONT_DISPLAY,
-            fontSize: isMobile ? 15 : 16,
-            fontWeight: 500,
+            fontSize: isMobile ? 16 : 18,
+            fontWeight: 600,
             color: T.ink,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}
         >
-          {isMobile ? 'Quinn' : 'TQL AI Deal Desk'}
+          Quinn
         </div>
-        <span
-          style={{
-            padding: '3px 10px',
-            borderRadius: 9999,
-            background: T.surfaceSoft,
-            color: T.charcoal,
-            fontSize: 11.5,
-            fontFamily: FONT_MONO,
-          }}
-        >
-          v6
-        </span>
+        {!isMobile && (
+          <div
+            style={{
+              fontFamily: FONT_BODY,
+              fontSize: 13,
+              color: T.body,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            TQL AI Deal Desk
+          </div>
+        )}
       </div>
-      {!isMobile && <div style={{ flex: 1 }} />}
-      {!isMobile && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '5px 12px',
-            borderRadius: 9999,
-            background: T.surfaceSoft,
-            color: T.charcoal,
-            fontSize: 12,
-            fontFamily: FONT_BODY,
-          }}
-        >
-          <Icon name="lock" size={11} stroke={1.6} />
-          Your data stays yours
-        </div>
-      )}
-      {!isMobile && (
-        <PillButton variant="secondary" icon="book" size="sm">
-          Docs
-        </PillButton>
-      )}
-      <PillButton variant="primary" icon="plus" size="sm" onClick={onNew}>
-        {isMobile ? '' : 'New'}
+      <PillButton variant="primary" size="sm" onClick={onLoginClick}>
+        Login
       </PillButton>
     </div>
   );
@@ -1885,6 +1848,18 @@ function useQuinnConversation() {
       setMessages((prev) => [...prev, userMsg, placeholder]);
       setBusy(true);
 
+      // Log the user turn to Supabase (fire-and-forget; never blocks the chat).
+      const sessionId = getSessionId();
+      void logChatTurn({
+        session_id: sessionId,
+        role: 'user',
+        content: text || '(file only)',
+        attachments: attachments.length
+          ? attachments.map((a) => ({ name: a.name, mimeType: a.mimeType, size: a.size }))
+          : undefined,
+      });
+      void logSearch({ session_id: sessionId, query: text });
+
       try {
         // Pass first file to the multimodal endpoint (OpenAI vision).
         // Multiple files: only first is sent for now (matches existing service signature).
@@ -1922,6 +1897,11 @@ function useQuinnConversation() {
           };
           return c;
         });
+
+        // Log the assistant reply
+        if (acc) {
+          void logChatTurn({ session_id: sessionId, role: 'assistant', content: acc });
+        }
       } catch (err: unknown) {
         const message =
           err instanceof Error ? err.message : 'Quinn ran into an error.';
@@ -1961,7 +1941,14 @@ function useQuinnConversation() {
 export default function QuinnPaperApp() {
   const isMobile = useIsMobile();
   const { messages, busy, send, stop, reset } = useQuinnConversation();
+  // Sidebar has 3 states on desktop: collapsed (icons only), expanded (full nav).
+  // On mobile it's the same but the panel slides off-screen entirely when collapsed.
+  const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(!isMobile);
+  const [adminOpen, setAdminOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.location.hash === '#/admin';
+  });
   const scrollerRef = useRef<HTMLDivElement>(null);
   const lastIdx = messages.length - 1;
   const lastIsAssistant = messages[lastIdx]?.role === 'model';
@@ -1969,6 +1956,7 @@ export default function QuinnPaperApp() {
   // Auto-collapse sidebar when crossing from desktop → mobile, auto-open on the reverse.
   useEffect(() => {
     setSidebarOpen(!isMobile);
+    if (isMobile) setSidebarExpanded(true); // mobile drawer always shows full labels
   }, [isMobile]);
 
   useEffect(() => {
@@ -1976,8 +1964,42 @@ export default function QuinnPaperApp() {
     scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
   }, [messages]);
 
+  // Listen for #/admin hash to open admin panel
+  useEffect(() => {
+    const onHash = (): void => setAdminOpen(window.location.hash === '#/admin');
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+
   const closeSidebar = (): void => setSidebarOpen(false);
   const openSidebar = (): void => setSidebarOpen(true);
+
+  const toggleSidebar = (): void => {
+    if (isMobile) {
+      // Mobile: toggle the drawer entirely
+      setSidebarOpen((v) => !v);
+    } else {
+      // Desktop: toggle between icons-only and expanded
+      setSidebarExpanded((v) => !v);
+    }
+  };
+
+  const handleLoginClick = (): void => {
+    window.location.hash = '#/admin';
+    setAdminOpen(true);
+  };
+
+  const handleAdminClose = (): void => {
+    if (window.location.hash === '#/admin') {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    setAdminOpen(false);
+  };
+
+  const handleSidebarAction = (prompt: string): void => {
+    void send(prompt);
+    if (isMobile) closeSidebar();
+  };
 
   return (
     <>
@@ -2031,7 +2053,7 @@ export default function QuinnPaperApp() {
           fontFamily: FONT_BODY,
         }}
       >
-        {/* Sidebar — overlay on mobile, collapsible-width on desktop */}
+        {/* Sidebar — overlay on mobile, collapsible-width (icon mode → expanded) on desktop */}
         <div
           style={{
             position: isMobile ? 'fixed' : 'relative',
@@ -2042,15 +2064,19 @@ export default function QuinnPaperApp() {
             transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
             transition: 'transform .25s, width .25s',
             flexShrink: 0,
-            // Desktop: width collapses to 0 when closed (true collapse, not overlap).
-            // Mobile: fixed-position overlay slides off via transform.
-            width: isMobile ? 280 : sidebarOpen ? 264 : 0,
+            // Desktop: 0 (hidden) → 56 (icons only) → 240 (expanded labels)
+            // Mobile: 280 px overlay always shows expanded
+            width: isMobile ? 280 : sidebarOpen ? (sidebarExpanded ? 240 : 56) : 0,
             maxWidth: '85vw',
             overflow: 'hidden',
             boxShadow: isMobile && sidebarOpen ? '0 0 24px rgba(0,0,0,0.12)' : 'none',
           }}
         >
-          <Sidebar onNew={reset} open={true} onClose={closeSidebar} />
+          <Sidebar
+            onNew={reset}
+            expanded={isMobile ? true : sidebarExpanded}
+            onAction={handleSidebarAction}
+          />
         </div>
 
         {/* Mobile backdrop */}
@@ -2080,9 +2106,9 @@ export default function QuinnPaperApp() {
           }}
         >
           <TopBar
-            onToggleSidebar={openSidebar}
-            sidebarOpen={!isMobile && sidebarOpen}
-            onNew={reset}
+            onToggleSidebar={toggleSidebar}
+            sidebarExpanded={!isMobile && sidebarExpanded}
+            onLoginClick={handleLoginClick}
             isMobile={isMobile}
           />
           <div
@@ -2141,13 +2167,14 @@ export default function QuinnPaperApp() {
                   fontFamily: FONT_BODY,
                 }}
               >
-                Quinn can make mistakes. Verify against source documents.
-                {!isMobile && ' Powered by Total Quality Lending'}
+                Quinn AI can make mistakes. Verify with source docs.
+                {!isMobile && ' Powered by Total Quality Lending.'}
               </div>
             </div>
           </div>
         </div>
       </div>
+      {adminOpen && <AdminPanel onClose={handleAdminClose} />}
     </>
   );
 }

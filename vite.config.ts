@@ -21,6 +21,9 @@ export default defineConfig(({mode}) => {
       'process.env.VITE_GEMINI_EMBED_MODEL': JSON.stringify(env.VITE_GEMINI_EMBED_MODEL),
       'process.env.VITE_CEREBRAS_MODEL': JSON.stringify(env.VITE_CEREBRAS_MODEL),
       'process.env.VITE_OPENAI_VISION_MODEL': JSON.stringify(env.VITE_OPENAI_VISION_MODEL),
+      'process.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL),
+      'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
+      'process.env.VITE_ADMIN_PASSCODE': JSON.stringify(env.VITE_ADMIN_PASSCODE || 'Winner26!'),
     },
     resolve: {
       alias: {
