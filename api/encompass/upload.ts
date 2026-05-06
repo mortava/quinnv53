@@ -138,7 +138,22 @@ async function uploadAttachment(
   return placeholder.attachmentId || 'unknown';
 }
 
+// Edge runtime — required for the (req: Request) => Promise<Response> signature.
+// Without this, Vercel uses Node runtime which expects (req, res) and the
+// function hangs forever with no response.
+export const config = { runtime: 'edge' };
+
 export default async function handler(req: Request): Promise<Response> {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type',
+      },
+    });
+  }
   if (req.method !== 'POST') {
     return Response.json({ ok: false, error: 'Method not allowed' }, { status: 405 });
   }
