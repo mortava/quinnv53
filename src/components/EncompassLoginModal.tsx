@@ -65,14 +65,10 @@ export default function EncompassLoginModal({ onClose, onSuccess }: EncompassLog
             fontSize: 22,
             fontWeight: 600,
             color: '#000',
-            marginBottom: 6,
+            marginBottom: 18,
           }}
         >
-          Sign in to Encompass
-        </div>
-        <div style={{ fontSize: 13, color: '#737373', marginBottom: 18, lineHeight: 1.5 }}>
-          Enter your Encompass email and password. Your password is sent only to TQL's secure
-          backend and exchanged for a session token. We never store your password.
+          Sign in to TQL PORTAL
         </div>
         <input
           type="email"

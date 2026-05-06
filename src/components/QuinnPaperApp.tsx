@@ -1847,10 +1847,67 @@ function planTools(q: string): ToolStepData[] {
 /* ---------- Conversation hook ---------- */
 type ExtMessage = Message & { tools?: ToolStepData[]; attachments?: AttachedFile[] };
 
+/**
+ * Persist the chat thread to sessionStorage so memory survives page refreshes
+ * and tab navigations within the same browser session. The LLM call already
+ * receives the full thread on every turn, so restoring `messages` on mount
+ * is all that's needed to keep Quinn aware of prior context.
+ */
+const CONVERSATION_KEY = 'quinn_conversation_v1';
+const CONVERSATION_MAX_BYTES = 1_000_000; // 1 MB safety cap per tab
+
+function loadStoredMessages(): ExtMessage[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.sessionStorage.getItem(CONVERSATION_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as ExtMessage[];
+    if (!Array.isArray(parsed)) return [];
+    // Restore Date objects that JSON serialization flattened to strings
+    return parsed.map((m) => ({
+      ...m,
+      timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function saveMessages(messages: ExtMessage[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    // Strip large attachment payloads from saved copy — base64 file data can
+    // blow past the 5 MB sessionStorage quota fast. We keep the metadata so
+    // chips still render but drop the bytes.
+    const trimmed = messages.map((m) => ({
+      ...m,
+      attachments: m.attachments?.map((a) => ({ ...a, data: '' })),
+    }));
+    const serialized = JSON.stringify(trimmed);
+    if (serialized.length > CONVERSATION_MAX_BYTES) {
+      // Drop oldest messages until we fit
+      const keep = [...trimmed];
+      while (JSON.stringify(keep).length > CONVERSATION_MAX_BYTES && keep.length > 2) {
+        keep.shift();
+      }
+      window.sessionStorage.setItem(CONVERSATION_KEY, JSON.stringify(keep));
+    } else {
+      window.sessionStorage.setItem(CONVERSATION_KEY, serialized);
+    }
+  } catch {
+    // quota exceeded or storage unavailable — silent fail, chat still works
+  }
+}
+
 function useQuinnConversation() {
-  const [messages, setMessages] = useState<ExtMessage[]>([]);
+  const [messages, setMessages] = useState<ExtMessage[]>(() => loadStoredMessages());
   const [busy, setBusy] = useState(false);
   const abortRef = useRef(false);
+
+  // Persist every change to sessionStorage so the thread survives refreshes
+  useEffect(() => {
+    saveMessages(messages);
+  }, [messages]);
 
   const send = useCallback(
     async (text: string, attachments: AttachedFile[] = []): Promise<void> => {
@@ -1974,6 +2031,9 @@ function useQuinnConversation() {
     setMessages([]);
     setBusy(false);
     abortRef.current = false;
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.removeItem(CONVERSATION_KEY);
+    }
   }, []);
 
   return { messages, busy, send, stop, reset };
