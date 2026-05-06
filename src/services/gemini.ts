@@ -465,7 +465,9 @@ async function* runCerebrasStream(
     model: CEREBRAS_MODEL,
     messages: chatMessages,
     stream: true,
-    max_tokens: 1500,
+    // 800 is enough for the 60–120 word target in the system prompt, and
+    // halves the worst-case generation time vs the previous 1500 cap.
+    max_tokens: 800,
   });
 
   // Auto-retry once on 429 with backoff. Surface real upstream error otherwise.
