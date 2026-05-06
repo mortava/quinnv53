@@ -3,6 +3,7 @@ import { Message, GenerativeUIData, SourceRef } from "../types";
 import { getRagContext } from "./ragService";
 import { getActiveOverrides } from "../overlay";
 import { findChunkBySection } from "../lib/knowledge_base";
+import { classifyIntent, callTool, renderResultForPrompt } from "./agentRouter";
 
 async function validateSourceRef(sourceRef: any): Promise<boolean> {
   if (!sourceRef || !sourceRef.docId || !sourceRef.sectionTitle) return false;
@@ -766,11 +767,26 @@ export async function* generateContentStream(
   const lastUserMessage = messages.filter(m => m.role === 'user').pop();
   const query = lastUserMessage?.content || "";
 
+  // Agentic step: classify intent. If the question is a non-guideline data
+  // fetch (Encompass deal, AirDNA, FUB, etc.), call the matching server tool
+  // first and inject the result into the prompt context. Guideline lookups
+  // skip this and go straight to the RAG path.
+  let agentContext = '';
+  const dispatch = classifyIntent(query);
+  if (dispatch && !fileData) {
+    try {
+      const result = await callTool(dispatch);
+      agentContext = `AGENT TOOL CONTEXT (${dispatch.tool}):\n${renderResultForPrompt(dispatch, result)}`;
+    } catch {
+      // never block the chat on tool failures
+    }
+  }
+
   const ragContext = await getRagContext(query);
   const overrides = getActiveOverrides();
   const overlayContext = overrides.length > 0
-    ? `OVERLAY GUIDELINES (FINAL SOURCE OF TRUTH):\n${JSON.stringify(overrides, null, 2)}`
-    : "";
+    ? `OVERLAY GUIDELINES (FINAL SOURCE OF TRUTH):\n${JSON.stringify(overrides, null, 2)}\n\n${agentContext}`
+    : agentContext;
 
   // Document analysis: route to OpenAI vision (gpt-4o-mini) by default.
   // runGeminiStream is kept available in this module for direct use as an
