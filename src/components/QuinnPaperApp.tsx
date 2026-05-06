@@ -19,6 +19,57 @@ import { generateContentStream } from '../services/gemini';
 import type { Message, GenerativeUIData, CitationSource } from '../types';
 import { GenerativeUI } from './GenerativeUI';
 
+/* ---------- Responsive helper ---------- */
+const MOBILE_BREAKPOINT = 768;
+
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches;
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
+    const onChange = (e: MediaQueryListEvent): void => setIsMobile(e.matches);
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+  return isMobile;
+}
+
+/* ---------- File helpers ---------- */
+interface AttachedFile {
+  name: string;
+  size: string;
+  mimeType: string;
+  /** base64 (no data: prefix) */
+  data: string;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function fileToAttached(file: File): Promise<AttachedFile> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('File read failed'));
+    reader.onload = () => {
+      const result = String(reader.result || '');
+      const base64 = result.split(',')[1] || '';
+      resolve({
+        name: file.name,
+        size: formatFileSize(file.size),
+        mimeType: file.type || 'application/octet-stream',
+        data: base64,
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 /* ---------- Tokens ---------- */
 const T = {
   ink: '#000000',
@@ -572,8 +623,214 @@ function Citations({ sources }: { sources: CitationSource[] }) {
   );
 }
 
+/* ---------- Attachment preview + Encompass push ---------- */
+type PushState = 'idle' | 'pushing' | 'sent' | 'error';
+
+function AttachmentPreview({ file }: { file: AttachedFile }) {
+  const [pushState, setPushState] = useState<PushState>('idle');
+  const [pushMsg, setPushMsg] = useState<string>('');
+  const [showPreview, setShowPreview] = useState<boolean>(false);
+  const isImage = file.mimeType.startsWith('image/');
+  const isPdf = file.mimeType === 'application/pdf';
+  const dataUrl = `data:${file.mimeType};base64,${file.data}`;
+
+  const openInTab = (): void => {
+    const blob = b64ToBlob(file.data, file.mimeType);
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  const sendToEncompass = async (): Promise<void> => {
+    const loanNumber = window.prompt(
+      'Encompass loan number to attach this document to:',
+    );
+    if (!loanNumber) return;
+    setPushState('pushing');
+    setPushMsg('');
+    try {
+      const res = await fetch('/api/encompass/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          loanNumber: loanNumber.trim(),
+          name: file.name,
+          mimeType: file.mimeType,
+          data: file.data,
+        }),
+      });
+      const json = (await res.json()) as { ok: boolean; error?: string };
+      if (json.ok) {
+        setPushState('sent');
+        setPushMsg(`Pushed to loan ${loanNumber.trim()}`);
+      } else {
+        setPushState('error');
+        setPushMsg(json.error || 'Encompass push failed');
+      }
+    } catch (err: unknown) {
+      setPushState('error');
+      setPushMsg(err instanceof Error ? err.message : 'Network error');
+    }
+  };
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        gap: 6,
+        maxWidth: 320,
+      }}
+    >
+      {/* Inline preview for images */}
+      {isImage && (
+        <button
+          type="button"
+          onClick={() => setShowPreview((v) => !v)}
+          style={{
+            padding: 0,
+            border: `1px solid ${T.hairline}`,
+            borderRadius: 12,
+            overflow: 'hidden',
+            background: T.canvas,
+            cursor: 'zoom-in',
+            maxWidth: 320,
+          }}
+        >
+          <img
+            src={dataUrl}
+            alt={file.name}
+            style={{
+              display: 'block',
+              maxWidth: showPreview ? 320 : 240,
+              maxHeight: showPreview ? 320 : 160,
+              transition: 'max-width .2s, max-height .2s',
+            }}
+          />
+        </button>
+      )}
+
+      {/* File chip */}
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '6px 12px',
+          borderRadius: 9999,
+          background: T.surfaceSoft,
+          border: `1px solid ${T.hairline}`,
+          fontSize: 12,
+          color: T.charcoal,
+          maxWidth: 320,
+        }}
+      >
+        <Icon name="fileText" size={11} stroke={1.6} />
+        <span
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            maxWidth: 160,
+          }}
+          title={file.name}
+        >
+          {file.name}
+        </span>
+        <span style={{ color: T.mute, fontFamily: FONT_MONO, fontSize: 10 }}>
+          {file.size}
+        </span>
+      </div>
+
+      {/* Action row */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        {(isPdf || isImage) && (
+          <button
+            type="button"
+            onClick={openInTab}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '4px 10px',
+              borderRadius: 9999,
+              background: T.canvas,
+              border: `1px solid ${T.hairline}`,
+              color: T.charcoal,
+              fontSize: 11,
+              cursor: 'pointer',
+            }}
+          >
+            <Icon name="fileText" size={10} stroke={1.6} /> View
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={sendToEncompass}
+          disabled={pushState === 'pushing' || pushState === 'sent'}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            padding: '4px 10px',
+            borderRadius: 9999,
+            background: pushState === 'sent' ? T.surfaceSoft : T.ink,
+            border: 0,
+            color: pushState === 'sent' ? T.charcoal : T.canvas,
+            fontSize: 11,
+            cursor: pushState === 'pushing' || pushState === 'sent' ? 'default' : 'pointer',
+            opacity: pushState === 'pushing' ? 0.6 : 1,
+          }}
+        >
+          {pushState === 'sent' ? (
+            <>
+              <Icon name="check" size={10} stroke={2.5} /> Sent
+            </>
+          ) : pushState === 'pushing' ? (
+            <>
+              <span className="qp-dot" /> Pushing
+            </>
+          ) : (
+            <>
+              <Icon name="arrowRight" size={10} stroke={1.8} /> Send to Encompass
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Status message */}
+      {pushMsg && (
+        <div
+          style={{
+            fontSize: 11,
+            color: pushState === 'error' ? T.down : T.body,
+            fontFamily: FONT_MONO,
+            textAlign: 'right',
+            maxWidth: 320,
+          }}
+        >
+          {pushMsg}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function b64ToBlob(b64: string, mimeType: string): Blob {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mimeType });
+}
+
 /* ---------- User message ---------- */
-function UserMessage({ text }: { text: string }) {
+interface UserMessageProps {
+  text: string;
+  attachments?: AttachedFile[];
+}
+
+function UserMessage({ text, attachments }: UserMessageProps) {
   return (
     <div
       style={{
@@ -581,9 +838,16 @@ function UserMessage({ text }: { text: string }) {
         flexDirection: 'column',
         alignItems: 'flex-end',
         marginBottom: 32,
-        gap: 8,
+        gap: 10,
       }}
     >
+      {attachments && attachments.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'flex-end' }}>
+          {attachments.map((a, i) => (
+            <AttachmentPreview key={i} file={a} />
+          ))}
+        </div>
+      )}
       <div style={{ maxWidth: '80%' }}>
         <div
           style={{
@@ -754,15 +1018,17 @@ function AssistantMessage({ msg, streaming }: AssistantMessageProps) {
 
 /* ---------- Composer ---------- */
 interface ComposerProps {
-  onSend: (text: string) => void;
+  onSend: (text: string, files: AttachedFile[]) => void;
   busy: boolean;
   onStop: () => void;
 }
 
 function Composer({ onSend, busy, onStop }: ComposerProps) {
   const [val, setVal] = useState('');
+  const [files, setFiles] = useState<AttachedFile[]>([]);
   const [focused, setFocused] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!taRef.current) return;
@@ -772,9 +1038,25 @@ function Composer({ onSend, busy, onStop }: ComposerProps) {
 
   const handleSend = (): void => {
     const text = val.trim();
-    if (!text || busy) return;
-    onSend(text);
+    if ((!text && files.length === 0) || busy) return;
+    onSend(text, files);
     setVal('');
+    setFiles([]);
+  };
+
+  const onPickFiles = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const picked = Array.from(e.target.files || []);
+    if (picked.length === 0) return;
+    const next: AttachedFile[] = [];
+    for (const f of picked) {
+      try {
+        next.push(await fileToAttached(f));
+      } catch {
+        // skip files that fail to read
+      }
+    }
+    if (next.length) setFiles((prev) => [...prev, ...next]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   return (
@@ -787,6 +1069,65 @@ function Composer({ onSend, busy, onStop }: ComposerProps) {
         transition: 'border-color .15s',
       }}
     >
+      {files.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+          {files.map((f, i) => (
+            <div key={i} style={{ position: 'relative' }}>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '8px 14px 8px 10px',
+                  borderRadius: 9999,
+                  background: T.surfaceSoft,
+                  border: `1px solid ${T.hairline}`,
+                  maxWidth: 260,
+                }}
+              >
+                <Icon name="fileText" size={13} stroke={1.6} />
+                <span
+                  style={{
+                    fontSize: 13,
+                    color: T.ink,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {f.name}
+                </span>
+                <span style={{ fontSize: 11, color: T.mute, fontFamily: FONT_MONO }}>
+                  {f.size}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFiles(files.filter((_, j) => j !== i))}
+                aria-label={`Remove ${f.name}`}
+                style={{
+                  position: 'absolute',
+                  top: -6,
+                  right: -6,
+                  width: 18,
+                  height: 18,
+                  borderRadius: 9999,
+                  background: T.ink,
+                  border: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: T.canvas,
+                  padding: 0,
+                  cursor: 'pointer',
+                }}
+              >
+                <Icon name="x" size={9} stroke={2.5} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <textarea
         ref={taRef}
         value={val}
@@ -824,6 +1165,41 @@ function Composer({ onSend, busy, onStop }: ComposerProps) {
           marginTop: 4,
         }}
       >
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept="image/*,.pdf"
+          onChange={onPickFiles}
+          style={{ display: 'none' }}
+        />
+        <button
+          type="button"
+          title="Attach a file"
+          aria-label="Attach a file"
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 36,
+            height: 36,
+            borderRadius: 9999,
+            background: 'transparent',
+            border: 0,
+            color: T.charcoal,
+            cursor: 'pointer',
+            transition: 'background .15s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = T.surfaceSoft;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          <Icon name="paperclip" size={16} stroke={1.75} />
+        </button>
         <button
           type="button"
           title="Tools"
@@ -896,7 +1272,7 @@ function Composer({ onSend, busy, onStop }: ComposerProps) {
           <button
             type="button"
             onClick={handleSend}
-            disabled={!val.trim()}
+            disabled={!val.trim() && files.length === 0}
             title="Send"
             style={{
               display: 'inline-flex',
@@ -905,11 +1281,11 @@ function Composer({ onSend, busy, onStop }: ComposerProps) {
               width: 36,
               height: 36,
               borderRadius: 9999,
-              background: val.trim() ? T.ink : T.surfaceSoft,
+              background: val.trim() || files.length > 0 ? T.ink : T.surfaceSoft,
               border: 0,
-              color: val.trim() ? T.canvas : T.mute,
+              color: val.trim() || files.length > 0 ? T.canvas : T.mute,
               transition: 'all .15s',
-              cursor: val.trim() ? 'pointer' : 'default',
+              cursor: val.trim() || files.length > 0 ? 'pointer' : 'default',
             }}
           >
             <Icon name="arrowUp" size={15} stroke={2.25} />
@@ -951,22 +1327,27 @@ const STARTERS: Starter[] = [
   },
 ];
 
-function EmptyState({ onPrompt }: { onPrompt: (p: string) => void }) {
+interface EmptyStateProps {
+  onPrompt: (p: string) => void;
+  isMobile?: boolean;
+}
+
+function EmptyState({ onPrompt, isMobile = false }: EmptyStateProps) {
   return (
     <div
       style={{
         maxWidth: 680,
         margin: '0 auto',
-        padding: '64px 24px 32px',
+        padding: isMobile ? '32px 16px 16px' : '64px 24px 32px',
         textAlign: 'center',
       }}
     >
       <div
         style={{
-          width: 64,
-          height: 64,
+          width: isMobile ? 52 : 64,
+          height: isMobile ? 52 : 64,
           borderRadius: 9999,
-          margin: '0 auto 24px',
+          margin: '0 auto 20px',
           background: T.canvas,
           border: `1px solid ${T.hairline}`,
           display: 'flex',
@@ -974,14 +1355,14 @@ function EmptyState({ onPrompt }: { onPrompt: (p: string) => void }) {
           justifyContent: 'center',
         }}
       >
-        <QuinnMark size={32} />
+        <QuinnMark size={isMobile ? 26 : 32} />
       </div>
       <h1
         style={{
           fontFamily: FONT_DISPLAY,
-          fontSize: 36,
+          fontSize: isMobile ? 26 : 36,
           fontWeight: 500,
-          lineHeight: 1.11,
+          lineHeight: 1.15,
           color: T.ink,
           margin: '0 0 12px',
         }}
@@ -1289,26 +1670,28 @@ interface TopBarProps {
   onToggleSidebar: () => void;
   sidebarOpen: boolean;
   onNew: () => void;
+  isMobile?: boolean;
 }
 
-function TopBar({ onToggleSidebar, sidebarOpen, onNew }: TopBarProps) {
+function TopBar({ onToggleSidebar, sidebarOpen, onNew, isMobile = false }: TopBarProps) {
   return (
     <div
       style={{
-        height: 64,
-        padding: '0 24px',
+        height: isMobile ? 56 : 64,
+        padding: isMobile ? '0 12px' : '0 24px',
         display: 'flex',
         alignItems: 'center',
-        gap: 16,
+        gap: isMobile ? 10 : 16,
         borderBottom: `1px solid ${T.hairline}`,
         background: T.canvas,
         flexShrink: 0,
       }}
     >
-      {!sidebarOpen && (
+      {(isMobile || !sidebarOpen) && (
         <button
           type="button"
           onClick={onToggleSidebar}
+          aria-label="Open menu"
           onMouseEnter={(e) => (e.currentTarget.style.background = T.surfaceSoft)}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           style={{
@@ -1322,18 +1705,19 @@ function TopBar({ onToggleSidebar, sidebarOpen, onNew }: TopBarProps) {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
+            flexShrink: 0,
           }}
         >
-          <Icon name="list" size={16} stroke={1.6} />
+          <Icon name="list" size={18} stroke={1.6} />
         </button>
       )}
       <div
-        style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: isMobile ? 1 : 'initial' }}
       >
         <div
           style={{
             fontFamily: FONT_DISPLAY,
-            fontSize: 16,
+            fontSize: isMobile ? 15 : 16,
             fontWeight: 500,
             color: T.ink,
             overflow: 'hidden',
@@ -1341,7 +1725,7 @@ function TopBar({ onToggleSidebar, sidebarOpen, onNew }: TopBarProps) {
             whiteSpace: 'nowrap',
           }}
         >
-          TQL AI Deal Desk
+          {isMobile ? 'Quinn' : 'TQL AI Deal Desk'}
         </div>
         <span
           style={{
@@ -1356,28 +1740,32 @@ function TopBar({ onToggleSidebar, sidebarOpen, onNew }: TopBarProps) {
           v6
         </span>
       </div>
-      <div style={{ flex: 1 }} />
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '5px 12px',
-          borderRadius: 9999,
-          background: T.surfaceSoft,
-          color: T.charcoal,
-          fontSize: 12,
-          fontFamily: FONT_BODY,
-        }}
-      >
-        <Icon name="lock" size={11} stroke={1.6} />
-        Your data stays yours
-      </div>
-      <PillButton variant="secondary" icon="book" size="sm">
-        Docs
-      </PillButton>
+      {!isMobile && <div style={{ flex: 1 }} />}
+      {!isMobile && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '5px 12px',
+            borderRadius: 9999,
+            background: T.surfaceSoft,
+            color: T.charcoal,
+            fontSize: 12,
+            fontFamily: FONT_BODY,
+          }}
+        >
+          <Icon name="lock" size={11} stroke={1.6} />
+          Your data stays yours
+        </div>
+      )}
+      {!isMobile && (
+        <PillButton variant="secondary" icon="book" size="sm">
+          Docs
+        </PillButton>
+      )}
       <PillButton variant="primary" icon="plus" size="sm" onClick={onNew}>
-        New
+        {isMobile ? '' : 'New'}
       </PillButton>
     </div>
   );
@@ -1435,7 +1823,7 @@ function planTools(q: string): ToolStepData[] {
 }
 
 /* ---------- Conversation hook ---------- */
-type ExtMessage = Message & { tools?: ToolStepData[] };
+type ExtMessage = Message & { tools?: ToolStepData[]; attachments?: AttachedFile[] };
 
 function useQuinnConversation() {
   const [messages, setMessages] = useState<ExtMessage[]>([]);
@@ -1443,26 +1831,46 @@ function useQuinnConversation() {
   const abortRef = useRef(false);
 
   const send = useCallback(
-    async (text: string): Promise<void> => {
+    async (text: string, attachments: AttachedFile[] = []): Promise<void> => {
       abortRef.current = false;
+      const fileNote = attachments.length
+        ? `\n\n[Attached: ${attachments.map((a) => a.name).join(', ')}]`
+        : '';
       const userMsg: ExtMessage = {
         id: uuidv4(),
         role: 'user',
-        content: text,
+        content: (text || '(see attached file)') + fileNote,
         timestamp: new Date(),
+        attachments,
       };
+      const tools = attachments.length
+        ? [
+            {
+              tool: 'fileText' as ToolName,
+              label: 'Reading attachment',
+              detail: attachments[0].mimeType,
+              status: 'running' as ToolStatus,
+            },
+            ...planTools(text),
+          ]
+        : planTools(text);
       const placeholder: ExtMessage = {
         id: uuidv4(),
         role: 'model',
         content: '',
         timestamp: new Date(),
-        tools: planTools(text).map((t) => ({ ...t, status: 'running' })),
+        tools: tools.map((t) => ({ ...t, status: 'running' })),
       };
       setMessages((prev) => [...prev, userMsg, placeholder]);
       setBusy(true);
 
       try {
-        const stream = generateContentStream([...messages, userMsg]);
+        // Pass first file to the multimodal endpoint (OpenAI vision).
+        // Multiple files: only first is sent for now (matches existing service signature).
+        const fileData = attachments[0]
+          ? { mimeType: attachments[0].mimeType, data: attachments[0].data }
+          : undefined;
+        const stream = generateContentStream([...messages, userMsg], fileData);
         let acc = '';
         let gen: GenerativeUIData | undefined;
         for await (const chunk of stream) {
@@ -1530,25 +1938,40 @@ function useQuinnConversation() {
 
 /* ---------- Quinn Paper App ---------- */
 export default function QuinnPaperApp() {
+  const isMobile = useIsMobile();
   const { messages, busy, send, stop, reset } = useQuinnConversation();
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(!isMobile);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const lastIdx = messages.length - 1;
   const lastIsAssistant = messages[lastIdx]?.role === 'model';
+
+  // Auto-collapse sidebar when crossing from desktop → mobile, auto-open on the reverse.
+  useEffect(() => {
+    setSidebarOpen(!isMobile);
+  }, [isMobile]);
 
   useEffect(() => {
     if (!scrollerRef.current) return;
     scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
   }, [messages]);
 
+  const closeSidebar = (): void => setSidebarOpen(false);
+  const openSidebar = (): void => setSidebarOpen(true);
+
   return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-        .qp-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .qp-scroll::-webkit-scrollbar-track { background: transparent; }
-        .qp-scroll::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.10); border-radius: 999px; }
-        .qp-scroll::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.20); }
+        html, body, #root { height: 100%; height: 100dvh; margin: 0; padding: 0; overflow: hidden; }
+        body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+        /* Auto-fading scrollbar — invisible until hover, never shows the persistent grey bar */
+        .qp-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .qp-scroll::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
+        @media (hover: hover) {
+          .qp-scroll:hover { scrollbar-width: thin; }
+          .qp-scroll:hover::-webkit-scrollbar { width: 6px; height: 6px; }
+          .qp-scroll:hover::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); border-radius: 999px; }
+        }
         .qp-cursor::after { content: "▍"; display: inline-block; margin-left: 2px; color: ${T.ink}; animation: qp-blink 1s steps(2) infinite; font-weight: 300; }
         @keyframes qp-blink { 50% { opacity: 0; } }
         .qp-dot { width: 4px; height: 4px; border-radius: 999px; background: ${T.ink}; animation: qp-pulse 1.2s ease-in-out infinite; display: inline-block; }
@@ -1562,16 +1985,23 @@ export default function QuinnPaperApp() {
         .qp-prose li { margin-bottom: 4px; line-height: 1.55; color: #171717; font-size: 16px; }
         .qp-prose code { font-family: ${FONT_MONO}; font-size: 0.875em; padding: 2px 8px; background: ${T.surfaceSoft}; border-radius: 9999px; color: ${T.ink}; }
         .qp-prose h3, .qp-prose h4 { font-family: ${FONT_DISPLAY}; font-size: 18px; font-weight: 600; margin: 20px 0 8px; color: ${T.ink}; }
-        .qp-prose table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 14px; border: 1px solid ${T.hairline}; border-radius: 12px; overflow: hidden; }
+        .qp-prose table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 14px; border: 1px solid ${T.hairline}; border-radius: 12px; overflow: hidden; display: block; overflow-x: auto; white-space: nowrap; }
         .qp-prose th, .qp-prose td { text-align: left; padding: 10px 14px; border-bottom: 1px solid ${T.hairline}; }
         .qp-prose th { font-size: 12px; font-weight: 500; color: ${T.body}; background: ${T.surfaceSoft}; text-transform: uppercase; letter-spacing: 0.04em; }
         .qp-prose td { color: ${T.ink}; font-variant-numeric: tabular-nums; }
         .qp-prose tr:last-child td { border-bottom: 0; }
+        /* Mobile: prevent iOS zoom on focus, tighten margins, scale headline */
+        @media (max-width: ${MOBILE_BREAKPOINT - 1}px) {
+          .qp-prose p, .qp-prose li { font-size: 15px; }
+          .qp-prose h3, .qp-prose h4 { font-size: 17px; }
+          input, textarea, select { font-size: 16px !important; }
+        }
       `}</style>
       <div
         style={{
           width: '100vw',
-          height: '100vh',
+          height: '100dvh',
+          position: 'relative',
           display: 'flex',
           overflow: 'hidden',
           background: T.canvas,
@@ -1579,25 +2009,56 @@ export default function QuinnPaperApp() {
           fontFamily: FONT_BODY,
         }}
       >
-        <Sidebar
-          onNew={reset}
-          open={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-        />
+        {/* Sidebar — overlay on mobile, push-flow on desktop */}
+        <div
+          style={{
+            position: isMobile ? 'fixed' : 'relative',
+            top: 0,
+            left: 0,
+            height: isMobile ? '100dvh' : 'auto',
+            zIndex: isMobile ? 50 : 'auto',
+            transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
+            transition: 'transform .25s',
+            flexShrink: 0,
+            width: isMobile ? 280 : 264,
+            maxWidth: '85vw',
+            boxShadow: isMobile && sidebarOpen ? '0 0 24px rgba(0,0,0,0.12)' : 'none',
+          }}
+        >
+          <Sidebar onNew={reset} open={true} onClose={closeSidebar} />
+        </div>
+
+        {/* Mobile backdrop */}
+        {isMobile && sidebarOpen && (
+          <div
+            onClick={closeSidebar}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.35)',
+              zIndex: 40,
+              animation: 'qp-blink 0s',
+            }}
+          />
+        )}
+
+        {/* Main content */}
         <div
           style={{
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            marginLeft: sidebarOpen ? 0 : -264,
+            marginLeft: !isMobile && !sidebarOpen ? -264 : 0,
             transition: 'margin-left .25s',
             minWidth: 0,
+            width: '100%',
           }}
         >
           <TopBar
-            onToggleSidebar={() => setSidebarOpen(true)}
-            sidebarOpen={sidebarOpen}
+            onToggleSidebar={openSidebar}
+            sidebarOpen={!isMobile && sidebarOpen}
             onNew={reset}
+            isMobile={isMobile}
           />
           <div
             ref={scrollerRef}
@@ -1605,18 +2066,22 @@ export default function QuinnPaperApp() {
             style={{ flex: 1, overflowY: 'auto', background: T.canvas }}
           >
             {messages.length === 0 ? (
-              <EmptyState onPrompt={(p) => void send(p)} />
+              <EmptyState onPrompt={(p) => void send(p)} isMobile={isMobile} />
             ) : (
               <div
                 style={{
                   maxWidth: 760,
                   margin: '0 auto',
-                  padding: '32px 24px 24px',
+                  padding: isMobile ? '20px 16px 16px' : '32px 24px 24px',
                 }}
               >
                 {messages.map((m, i) =>
                   m.role === 'user' ? (
-                    <UserMessage key={m.id} text={m.content} />
+                    <UserMessage
+                      key={m.id}
+                      text={m.content}
+                      attachments={(m as ExtMessage).attachments}
+                    />
                   ) : (
                     <AssistantMessage
                       key={m.id}
@@ -1630,14 +2095,15 @@ export default function QuinnPaperApp() {
           </div>
           <div
             style={{
-              padding: '12px 24px 24px',
-              background: `linear-gradient(180deg, transparent 0%, ${T.canvas} 30%)`,
+              padding: isMobile ? '8px 12px 16px' : '12px 24px 24px',
+              background: T.canvas,
               flexShrink: 0,
+              borderTop: `1px solid ${T.hairline}`,
             }}
           >
             <div style={{ maxWidth: 760, margin: '0 auto' }}>
               <Composer
-                onSend={(t) => void send(t)}
+                onSend={(t, files) => void send(t, files)}
                 busy={busy}
                 onStop={stop}
               />
@@ -1645,13 +2111,13 @@ export default function QuinnPaperApp() {
                 style={{
                   textAlign: 'center',
                   marginTop: 10,
-                  fontSize: 12,
+                  fontSize: isMobile ? 11 : 12,
                   color: T.mute,
                   fontFamily: FONT_BODY,
                 }}
               >
                 Quinn can make mistakes. Verify against source documents.
-                Powered by Total Quality Lending
+                {!isMobile && ' Powered by Total Quality Lending'}
               </div>
             </div>
           </div>

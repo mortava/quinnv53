@@ -452,6 +452,108 @@ async function* runCerebrasStream(
 
 // ─── Gemini streaming path (fallback) ────────────────────────────────────────
 
+// ─── OpenAI vision path (primary for document processing) ────────────────────
+
+const OPENAI_VISION_MODEL =
+  (process.env.VITE_OPENAI_VISION_MODEL as string) || 'gpt-4o-mini';
+const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
+
+async function* runOpenAIDocStream(
+  messages: Message[],
+  ragContext: string,
+  overlayContext: string,
+  query: string,
+  fileData: { mimeType: string; data: string }
+): AsyncGenerator<{ text: string; generativeUI?: GenerativeUIData }> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY not configured');
+
+  const isImage = fileData.mimeType.startsWith('image/');
+  const dataUrl = `data:${fileData.mimeType};base64,${fileData.data}`;
+
+  // Compose the final user turn with text + image (image_url part).
+  // PDF and other non-image MIME types fall back to a text-only note since
+  // OpenAI chat completions only accept image_url here; PDF→image conversion
+  // can be layered in later if needed.
+  const userParts: Array<Record<string, unknown>> = [
+    {
+      type: 'text',
+      text: [
+        overlayContext,
+        ragContext ? `KNOWLEDGE BASE CONTEXT:\n${ragContext}` : '',
+        `USER QUERY: ${query}`,
+        isImage ? '' : `(Attached file mime-type: ${fileData.mimeType} — text content only.)`,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+    },
+  ];
+  if (isImage) {
+    userParts.push({
+      type: 'image_url',
+      image_url: { url: dataUrl, detail: 'auto' },
+    });
+  }
+
+  const chatMessages = [
+    { role: 'system', content: systemInstruction },
+    ...messages.slice(0, -1).map((m) => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.content,
+    })),
+    { role: 'user', content: userParts },
+  ];
+
+  const res = await fetch(OPENAI_URL, {
+    method: 'POST',
+    signal: AbortSignal.timeout(45000),
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: OPENAI_VISION_MODEL,
+      messages: chatMessages,
+      stream: true,
+      max_tokens: 1500,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`OpenAI ${res.status}: ${body.slice(0, 200)}`);
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() || '';
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line.startsWith('data:')) continue;
+      const payload = line.slice(5).trim();
+      if (payload === '[DONE]') return;
+      try {
+        const parsed = JSON.parse(payload);
+        const delta = parsed.choices?.[0]?.delta?.content;
+        if (typeof delta === 'string' && delta.length > 0) {
+          yield { text: delta };
+        }
+      } catch {
+        // ignore malformed SSE chunks
+      }
+    }
+  }
+}
+
+// ─── Gemini multimodal path (kept available, used by direct call sites) ──────
+
 async function* runGeminiStream(
   contents: any[],
   query: string,
@@ -511,25 +613,18 @@ export async function* generateContentStream(
     ? `OVERLAY GUIDELINES (FINAL SOURCE OF TRUTH):\n${JSON.stringify(overrides, null, 2)}`
     : "";
 
-  // Document analysis: use Gemini (multimodal). All other queries: Groq only.
+  // Document analysis: route to OpenAI vision (gpt-4o-mini) by default.
+  // runGeminiStream is kept available in this module for direct use as an
+  // alternate path or future fallback.
   if (fileData) {
-    const contents: any[] = messages.map(msg => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.content }],
-    }));
-    if (contents.length > 0) {
-      const last = contents[contents.length - 1];
-      if (last.role === 'user') {
-        last.parts = [{ text: [overlayContext, `KNOWLEDGE BASE CONTEXT:\n${ragContext}`, `USER QUERY: ${query}`].filter(Boolean).join('\n\n') }];
-      }
-    }
     try {
-      for await (const chunk of runGeminiStream(contents, query, fileData)) {
+      for await (const chunk of runOpenAIDocStream(messages, ragContext, overlayContext, query, fileData)) {
         if ('text' in chunk && chunk.text) yield { text: sanitizeText(chunk.text) };
         else yield chunk;
       }
-    } catch {
-      throw new Error('Document analysis unavailable — please try again.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Document analysis failed: ${msg.slice(0, 120)}`);
     }
     return;
   }
