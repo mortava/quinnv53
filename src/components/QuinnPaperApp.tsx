@@ -104,8 +104,7 @@ type IconName =
   | 'chart'
   | 'check'
   | 'copy'
-  | 'thumbsUp'
-  | 'thumbsDown'
+  | 'share'
   | 'refresh'
   | 'arrowUp'
   | 'arrowRight'
@@ -188,11 +187,14 @@ function Icon({ name, size = 16, stroke = 1.6, style }: IconProps) {
         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
       </>
     ),
-    thumbsUp: (
-      <path d="M7 10v12M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7V10l5-8a2 2 0 0 1 2 2v1.88z" />
-    ),
-    thumbsDown: (
-      <path d="M17 14V2M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H17v12l-5 8a2 2 0 0 1-2-2v-1.88z" />
+    share: (
+      <>
+        <circle cx="18" cy="5" r="3" />
+        <circle cx="6" cy="12" r="3" />
+        <circle cx="18" cy="19" r="3" />
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+      </>
     ),
     refresh: (
       <>
@@ -869,8 +871,9 @@ function UserMessage({ text, attachments }: UserMessageProps) {
 }
 
 /* ---------- Message actions ---------- */
-function MessageActions({ onCopy }: { onCopy: () => void }) {
+function MessageActions({ onCopy, content }: { onCopy: () => void; content: string }) {
   const [copied, setCopied] = useState(false);
+  const [shared, setShared] = useState(false);
   const acts: { icon: IconName; title: string; onClick?: () => void }[] = [
     {
       icon: copied ? 'check' : 'copy',
@@ -881,8 +884,25 @@ function MessageActions({ onCopy }: { onCopy: () => void }) {
         setTimeout(() => setCopied(false), 1500);
       },
     },
-    { icon: 'thumbsUp', title: 'Good' },
-    { icon: 'thumbsDown', title: 'Bad' },
+    {
+      icon: shared ? 'check' : 'share',
+      title: shared ? 'Link copied' : 'Share',
+      onClick: async () => {
+        const url = window.location.href;
+        const shareText = `${content}\n\n— Quinn AI Deal Desk · ${url}`;
+        try {
+          if (navigator.share) {
+            await navigator.share({ title: 'Quinn — Deal Desk Answer', text: content, url });
+          } else {
+            await navigator.clipboard.writeText(shareText);
+          }
+          setShared(true);
+          setTimeout(() => setShared(false), 1500);
+        } catch {
+          // user cancelled share or clipboard blocked — silent
+        }
+      },
+    },
     { icon: 'refresh', title: 'Retry' },
   ];
   return (
@@ -1009,6 +1029,7 @@ function AssistantMessage({ msg, streaming }: AssistantMessageProps) {
         {!streaming && msg.content && (
           <MessageActions
             onCopy={() => navigator.clipboard?.writeText(msg.content)}
+            content={msg.content}
           />
         )}
       </div>
@@ -1964,6 +1985,7 @@ export default function QuinnPaperApp() {
         @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
         html, body, #root { height: 100%; height: 100dvh; margin: 0; padding: 0; overflow: hidden; }
         body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+        .qp-prose { word-wrap: break-word; overflow-wrap: break-word; max-width: 100%; }
         /* Auto-fading scrollbar — invisible until hover, never shows the persistent grey bar */
         .qp-scroll { scrollbar-width: none; -ms-overflow-style: none; }
         .qp-scroll::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
@@ -1985,7 +2007,7 @@ export default function QuinnPaperApp() {
         .qp-prose li { margin-bottom: 4px; line-height: 1.55; color: #171717; font-size: 16px; }
         .qp-prose code { font-family: ${FONT_MONO}; font-size: 0.875em; padding: 2px 8px; background: ${T.surfaceSoft}; border-radius: 9999px; color: ${T.ink}; }
         .qp-prose h3, .qp-prose h4 { font-family: ${FONT_DISPLAY}; font-size: 18px; font-weight: 600; margin: 20px 0 8px; color: ${T.ink}; }
-        .qp-prose table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 14px; border: 1px solid ${T.hairline}; border-radius: 12px; overflow: hidden; display: block; overflow-x: auto; white-space: nowrap; }
+        .qp-prose table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 14px; border: 1px solid ${T.hairline}; border-radius: 12px; overflow: hidden; table-layout: fixed; word-wrap: break-word; }
         .qp-prose th, .qp-prose td { text-align: left; padding: 10px 14px; border-bottom: 1px solid ${T.hairline}; }
         .qp-prose th { font-size: 12px; font-weight: 500; color: ${T.body}; background: ${T.surfaceSoft}; text-transform: uppercase; letter-spacing: 0.04em; }
         .qp-prose td { color: ${T.ink}; font-variant-numeric: tabular-nums; }
@@ -2009,7 +2031,7 @@ export default function QuinnPaperApp() {
           fontFamily: FONT_BODY,
         }}
       >
-        {/* Sidebar — overlay on mobile, push-flow on desktop */}
+        {/* Sidebar — overlay on mobile, collapsible-width on desktop */}
         <div
           style={{
             position: isMobile ? 'fixed' : 'relative',
@@ -2018,10 +2040,13 @@ export default function QuinnPaperApp() {
             height: isMobile ? '100dvh' : 'auto',
             zIndex: isMobile ? 50 : 'auto',
             transform: isMobile && !sidebarOpen ? 'translateX(-100%)' : 'translateX(0)',
-            transition: 'transform .25s',
+            transition: 'transform .25s, width .25s',
             flexShrink: 0,
-            width: isMobile ? 280 : 264,
+            // Desktop: width collapses to 0 when closed (true collapse, not overlap).
+            // Mobile: fixed-position overlay slides off via transform.
+            width: isMobile ? 280 : sidebarOpen ? 264 : 0,
             maxWidth: '85vw',
+            overflow: 'hidden',
             boxShadow: isMobile && sidebarOpen ? '0 0 24px rgba(0,0,0,0.12)' : 'none',
           }}
         >
@@ -2048,10 +2073,10 @@ export default function QuinnPaperApp() {
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
-            marginLeft: !isMobile && !sidebarOpen ? -264 : 0,
             transition: 'margin-left .25s',
             minWidth: 0,
             width: '100%',
+            overflowX: 'hidden',
           }}
         >
           <TopBar

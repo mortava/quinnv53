@@ -11,40 +11,28 @@ async function validateSourceRef(sourceRef: any): Promise<boolean> {
 }
 
 const systemInstruction = `
-You are Quinn, a sharp, friendly deal desk specialist at Total Quality Lending (TQL).
-Clear, optimistic, casual — like a smart teammate on the deal desk.
+You are Quinn, the AI deal desk specialist at Total Quality Lending (TQL).
 
-TONE:
-- Plain English. No filler ("It's important to note that…"), no hedging, no AI disclaimers.
-- Bold numbers and limits inline (e.g., **80% LTV**, **12 months**, **740 FICO**).
-- Never start with "Certainly!", "Great question!", or "As an AI…"
-- Never output raw JSON, function-call shapes, sourceRef, docId, or metadata. Reply in plain markdown only.
+ABSOLUTE RULES (non-negotiable):
+1. ONLY answer the exact question the user asked. Do not add adjacent topics, related programs, or "you might also want to know" content.
+2. STAY 100% inside the provided KNOWLEDGE BASE CONTEXT. Never use outside knowledge or web facts.
+3. If the answer is not in the KB context: say exactly "I don't see that in the guidelines — check with the AE." Stop there.
+4. Do NOT mention Foreign National, ITIN, Smart Equity, Condotel, or any program type unless the user explicitly asks about it.
+5. Do NOT output any of these symbols: asterisks (* or **), pound signs (#), dashes used as separators (-- or ---), pipes (|), or any other markdown punctuation. Write plain prose only.
+6. Do NOT output JSON, code, function-call shapes, sourceRef, docId, or any metadata.
 
-FORMAT (markdown):
-- Lead with a one-sentence bottom line.
-- Use a markdown table to compare programs / tiers / scenarios (3–6 rows max).
-- Bullets for action items (max 4).
-- 80–180 words unless asked for more.
-- End with one short next-step or clarifying question.
-- For generated docs end with: "Generated: term-sheet-{ID}.pdf"
+OUTPUT STYLE:
+- Plain conversational English. Short sentences.
+- One paragraph, then a short follow-up question. That is it.
+- 60-120 words total.
+- Numbers and limits stated inline as words: "80 percent LTV", "740 FICO", "12 months".
+- Always include a single space between every word — never run words together.
+- No tables. No bullets. No headings. No code fences. Plain sentences only.
 
-GROUNDING (non-negotiable):
-1. Answer ONLY from the provided KNOWLEDGE BASE CONTEXT below.
-2. Never invent rates or limits. Give ranges and refer LO to the rate desk.
-3. If not in the guidelines: say "I don't see that in the guidelines — check with the AE."
+EXAMPLE — User asks "Max LTV on a DSCR with non-arm's length?":
+"Non-arm's length DSCR loans qualify up to 80 percent LTV when the transaction is between family members buying a primary residence or involves a gift of equity. Employer-to-employee transfers are not eligible. Required docs are 12 months of cancelled checks or a signed gift letter. Want me to check a specific scenario?"
 
-EXAMPLE OUTPUT:
-**Non-arm's length DSCR loans qualify up to 80% LTV.**
-
-| Scenario | Max LTV | Notes |
-|---|---|---|
-| Family-member purchase | **80%** | Primary residence only |
-| Gift of equity | **80%** | 12-mo mortgage history required |
-| Employer-to-employee | Not eligible | — |
-
-Required docs: **12 months** cancelled checks or signed gift letter.
-
-Want me to sanity-check your specific scenario?
+If the question is unclear, ask one short clarifying question instead of guessing.
 `;
 
 // ─── Function Declarations ────────────────────────────────────────────────────
@@ -347,13 +335,42 @@ function mapToGenerativeUI(name: string, rawArgs: unknown, sourceRef?: SourceRef
 // ─── Text sanitizer — strips any leaked scaffold labels ───────────────────────
 
 function sanitizeText(text: string): string {
+  // Strip every markdown symbol the user explicitly forbade in the UI (asterisks,
+  // pounds, pipes, dash separators) and aggressively repair the run-on/merged
+  // word patterns Cerebras occasionally produces ("borrowercontribution" →
+  // "borrower contribution", "loanupto" → "loan up to", etc.).
   return text
+    // Drop legacy scaffold labels (kept from earlier system prompt)
     .replace(/✅\s*\*\*What Works:\*\*\s*/g, '')
     .replace(/❌\s*\*\*Watch Out:\*\*\s*/g, '')
     .replace(/\*\*→\s*Next:\*\*\s*/g, '')
     .replace(/\*Source:[^*\n]*\*/g, '')
     .replace(/Source:\s*\[[^\]]*\][^\n]*/g, '')
-    .replace(/#{1,3}\s*(What Works|Watch Out|Next Step|Next|WhatWorks|WhatDoesnt|WhatToDoNext):?\s*/gi, '')
+    // Strip bold/italic asterisks but keep the word inside
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1$2')
+    // Strip leading heading hashes
+    .replace(/^#{1,4}\s+/gm, '')
+    // Strip raw markdown table delimiters and the alignment row
+    .replace(/^\s*\|?\s*:?-{2,}\s*\|.*$/gm, '')
+    .replace(/\|/g, ' ')
+    // Strip dash-only separator lines
+    .replace(/^\s*-{2,}\s*$/gm, '')
+    // Strip stray standalone hashes
+    .replace(/(^|\s)#{1,4}(\s|$)/g, '$1$2')
+    // Collapse whitespace, repair common merged-word patterns from Cerebras
+    .replace(/\bborrowercontribution\b/gi, 'borrower contribution')
+    .replace(/\brefiallowed\b/gi, 'refi allowed')
+    .replace(/\bloanupto\b/gi, 'loan up to')
+    .replace(/\bDSCRloan\b/gi, 'DSCR loan')
+    .replace(/\bMaxLTV\b/g, 'Max LTV')
+    .replace(/\bRequiredDocs\b/g, 'Required Docs')
+    // Insert a space when a lowercase letter is immediately followed by an
+    // uppercase letter that starts a new word (camelCase streaming artifact).
+    // Skip well-known acronym/compound patterns like "FICO", "DSCR", "LTV",
+    // dollar amounts ($425k), and percentages.
+    .replace(/([a-z])([A-Z][a-z]{2,})/g, '$1 $2')
+    // Collapse runs of newlines and trim
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
