@@ -394,6 +394,8 @@ function sanitizeText(text: string): string {
 
 const CHAT_MODEL = (process.env.VITE_GEMINI_CHAT_MODEL as string) || 'gemini-2.0-flash';
 const CEREBRAS_MODEL = (process.env.VITE_CEREBRAS_MODEL as string) || 'llama3.1-8b';
+const OPENROUTER_MODEL = (process.env.VITE_OPENROUTER_MODEL as string) || 'google/gemma-3-27b-it:free';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions';
 
 function is429(err: any): boolean {
@@ -527,6 +529,82 @@ async function* runCerebrasStream(
       if (ui) yield { text: '', generativeUI: ui };
     } catch {
       // malformed JSON — skip
+    }
+  }
+}
+
+// ─── OpenRouter streaming path (text fallback when Cerebras fails) ────────────
+
+async function* runOpenRouterStream(
+  messages: Message[],
+  ragContext: string,
+  overlayContext: string,
+  query: string
+): AsyncGenerator<{ text: string }> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured');
+
+  const chatMessages = [
+    { role: 'system', content: systemInstruction },
+    ...messages.slice(0, -1).map((m) => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.content,
+    })),
+    {
+      role: 'user',
+      content: [
+        overlayContext,
+        ragContext ? `KNOWLEDGE BASE CONTEXT:\n${ragContext}` : '',
+        `USER QUERY: ${query}`,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+    },
+  ];
+
+  const res = await fetch(OPENROUTER_URL, {
+    method: 'POST',
+    signal: AbortSignal.timeout(30000),
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      // OpenRouter wants these for free-tier rate-limit attribution
+      'HTTP-Referer': 'https://quinnv5.tqltpo.com',
+      'X-Title': 'Quinn AI Deal Desk',
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_MODEL,
+      messages: chatMessages,
+      stream: true,
+      max_tokens: 1500,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`OpenRouter ${res.status}: ${body.slice(0, 200)}`);
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  outer: while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const raw = line.slice(6).trim();
+      if (raw === '[DONE]') break outer;
+      try {
+        const parsed = JSON.parse(raw);
+        const delta = parsed?.choices?.[0]?.delta?.content;
+        if (typeof delta === 'string' && delta.length > 0) yield { text: delta };
+      } catch {
+        // ignore malformed SSE chunks
+      }
     }
   }
 }
@@ -710,7 +788,9 @@ export async function* generateContentStream(
     return;
   }
 
-  // All text queries → Cerebras (llama3.1-8b, ~2000 tok/s)
+  // All text queries → Cerebras primary (llama3.1-8b, ~2000 tok/s)
+  // → OpenRouter fallback (Gemma-3-27B free) when Cerebras errors out
+  let cerebrasError: string | null = null;
   try {
     const cerebrasStream = runCerebrasStream(messages, ragContext, overlayContext, query);
     for await (const chunk of cerebrasStream) {
@@ -720,13 +800,32 @@ export async function* generateContentStream(
         yield chunk;
       }
     }
+    return;
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('AbortError') || msg.includes('timeout')) {
+    cerebrasError = err instanceof Error ? err.message : String(err);
+  }
+
+  // Fallback: OpenRouter
+  if (process.env.OPENROUTER_API_KEY) {
+    try {
+      const orStream = runOpenRouterStream(messages, ragContext, overlayContext, query);
+      for await (const chunk of orStream) {
+        yield { text: sanitizeText(chunk.text) };
+      }
+      return;
+    } catch (err: unknown) {
+      const orMsg = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Quinn primary + fallback both failed. Primary: ${cerebrasError?.slice(0, 120)}; OpenRouter: ${orMsg.slice(0, 120)}`,
+      );
+    }
+  }
+
+  // No fallback configured — surface the original error.
+  if (cerebrasError) {
+    if (cerebrasError.includes('AbortError') || cerebrasError.includes('timeout')) {
       throw new Error('Request timed out — try again.');
     }
-    // Surface the actual upstream message — prior code masked everything as
-    // "Rate limit hit" which was misleading when the real cause was different.
-    throw new Error(msg.slice(0, 240));
+    throw new Error(cerebrasError.slice(0, 240));
   }
 }

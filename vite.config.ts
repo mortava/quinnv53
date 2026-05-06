@@ -24,6 +24,9 @@ export default defineConfig(({mode}) => {
       'process.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL),
       'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(env.VITE_SUPABASE_ANON_KEY),
       'process.env.VITE_ADMIN_PASSCODE': JSON.stringify(env.VITE_ADMIN_PASSCODE || 'Winner26!'),
+      'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY),
+      'process.env.VITE_OPENROUTER_MODEL': JSON.stringify(env.VITE_OPENROUTER_MODEL || 'google/gemma-3-27b-it:free'),
+      'process.env.VITE_TQL_PRICER_URL': JSON.stringify(env.VITE_TQL_PRICER_URL || 'https://submit.tqltpo.com'),
     },
     resolve: {
       alias: {

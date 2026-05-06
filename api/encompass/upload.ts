@@ -35,7 +35,7 @@ interface EncompassEnv {
   pass: string;
 }
 
-const ENCOMPASS_BASE = 'https://api.elliemae.com';
+const ENCOMPASS_BASE = process.env.ENCOMPASS_API_BASE_URL || 'https://api.elliemae.com';
 
 function readEnv(): EncompassEnv | null {
   const clientId = process.env.ENCOMPASS_CLIENT_ID;

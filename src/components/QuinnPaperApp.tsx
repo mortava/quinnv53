@@ -1416,10 +1416,14 @@ interface SidebarNavItem {
   icon: IconName;
   label: string;
   prompt?: string;
+  href?: string;
 }
 
+const TQL_PRICER_URL =
+  (process.env.VITE_TQL_PRICER_URL as string) || 'https://submit.tqltpo.com';
+
 const NAV_ITEMS: SidebarNavItem[] = [
-  { icon: 'calc', label: 'Price a Loan', prompt: "I'd like to price a loan." },
+  { icon: 'calc', label: 'Price a Loan', href: TQL_PRICER_URL },
   { icon: 'database', label: 'My Loans', prompt: "Show me my loan pipeline." },
   { icon: 'fileText', label: 'Build Quote', prompt: "Help me build a quote." },
   { icon: 'book', label: 'Docs' },
@@ -1578,7 +1582,10 @@ function Sidebar({ onNew, expanded, onAction }: SidebarProps) {
             type="button"
             title={item.label}
             aria-label={item.label}
-            onClick={() => item.prompt && onAction?.(item.prompt)}
+            onClick={() => {
+              if (item.href) window.open(item.href, '_blank', 'noopener,noreferrer');
+              else if (item.prompt) onAction?.(item.prompt);
+            }}
             onMouseEnter={(e) => (e.currentTarget.style.background = T.surfaceSoft)}
             onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             style={{
