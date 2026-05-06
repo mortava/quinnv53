@@ -3,7 +3,6 @@ import type { ReactNode, ErrorInfo } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
-import { initializeKnowledgeBase } from './services/ragService';
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
   state = { hasError: false };
@@ -36,8 +35,6 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
     return this.props.children;
   }
 }
-
-initializeKnowledgeBase().catch(console.error);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
