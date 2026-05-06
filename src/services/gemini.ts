@@ -329,7 +329,8 @@ function sanitizeText(text: string): string {
 // ─── Model config ─────────────────────────────────────────────────────────────
 
 const CHAT_MODEL = (process.env.VITE_GEMINI_CHAT_MODEL as string) || 'gemini-2.0-flash';
-const GROQ_MODEL = 'llama-3.1-8b-instant';
+const CEREBRAS_MODEL = (process.env.VITE_CEREBRAS_MODEL as string) || 'llama3.1-8b';
+const CEREBRAS_URL = 'https://api.cerebras.ai/v1/chat/completions';
 
 function is429(err: any): boolean {
   return (
@@ -341,18 +342,18 @@ function is429(err: any): boolean {
   );
 }
 
-// ─── Groq streaming path (primary) ───────────────────────────────────────────
+// ─── Cerebras streaming path (primary) ──────────────────────────────────────
 
-async function* runGroqStream(
+async function* runCerebrasStream(
   messages: Message[],
   ragContext: string,
   overlayContext: string,
   query: string
 ): AsyncGenerator<{ text: string; generativeUI?: GenerativeUIData }> {
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error('GROQ_API_KEY not configured');
+  const apiKey = process.env.CEREBRAS_API_KEY;
+  if (!apiKey) throw new Error('CEREBRAS_API_KEY not configured');
 
-  const groqMessages = [
+  const chatMessages = [
     { role: 'system', content: systemInstruction },
     ...messages.slice(0, -1).map(m => ({
       role: m.role === 'user' ? 'user' : 'assistant',
@@ -377,7 +378,7 @@ async function* runGroqStream(
     },
   }));
 
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const res = await fetch(CEREBRAS_URL, {
     method: 'POST',
     signal: AbortSignal.timeout(25000),
     headers: {
@@ -385,8 +386,8 @@ async function* runGroqStream(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: groqMessages,
+      model: CEREBRAS_MODEL,
+      messages: chatMessages,
       tools: openAITools,
       tool_choice: 'auto',
       stream: true,
@@ -396,7 +397,7 @@ async function* runGroqStream(
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Groq ${res.status}: ${body}`);
+    throw new Error(`Cerebras ${res.status}: ${body}`);
   }
 
   const reader = res.body!.getReader();
@@ -533,20 +534,20 @@ export async function* generateContentStream(
     return;
   }
 
-  // All text queries → Groq (llama-3.1-8b-instant, ~750 tok/s)
+  // All text queries → Cerebras (llama3.1-8b, ~2000 tok/s)
   try {
-    const groqStream = runGroqStream(messages, ragContext, overlayContext, query);
-    for await (const chunk of groqStream) {
+    const cerebrasStream = runCerebrasStream(messages, ragContext, overlayContext, query);
+    for await (const chunk of cerebrasStream) {
       if ('text' in chunk && chunk.text) {
         yield { text: sanitizeText(chunk.text) };
       } else {
         yield chunk;
       }
     }
-  } catch (err: any) {
-    const msg = String(err);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('AbortError') || msg.includes('timeout')) {
-      throw new Error('Request timed out — Groq may be busy. Try again.');
+      throw new Error('Request timed out — Cerebras may be busy. Try again.');
     }
     if (msg.includes('429') || msg.includes('rate_limit')) {
       throw new Error('Rate limit hit — wait a moment and try again.');
