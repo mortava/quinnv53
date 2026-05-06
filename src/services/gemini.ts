@@ -378,26 +378,49 @@ async function* runCerebrasStream(
     },
   }));
 
-  const res = await fetch(CEREBRAS_URL, {
-    method: 'POST',
-    signal: AbortSignal.timeout(25000),
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: CEREBRAS_MODEL,
-      messages: chatMessages,
-      tools: openAITools,
-      tool_choice: 'auto',
-      stream: true,
-      max_tokens: 1500,
-    }),
+  const requestBody = JSON.stringify({
+    model: CEREBRAS_MODEL,
+    messages: chatMessages,
+    tools: openAITools,
+    tool_choice: 'auto',
+    stream: true,
+    max_tokens: 1500,
   });
 
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Cerebras ${res.status}: ${body}`);
+  // Auto-retry once on 429 with backoff. Surface real upstream error otherwise.
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    res = await fetch(CEREBRAS_URL, {
+      method: 'POST',
+      signal: AbortSignal.timeout(25000),
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: requestBody,
+    });
+    if (res.ok) break;
+    if (res.status === 429 && attempt === 0) {
+      // Honor Retry-After if present, else 3s
+      const ra = Number(res.headers.get('retry-after') || '3');
+      await new Promise((r) => setTimeout(r, Math.min(8000, Math.max(1000, ra * 1000))));
+      continue;
+    }
+    break;
+  }
+  if (!res || !res.ok) {
+    const status = res?.status ?? 0;
+    const body = res ? await res.text() : 'no response';
+    // Strip JSON wrapping so the user sees a useful message
+    let detail = body;
+    try {
+      const j = JSON.parse(body) as { error?: { message?: string } | string };
+      const m = typeof j.error === 'string' ? j.error : j.error?.message;
+      if (m) detail = m;
+    } catch {
+      // body wasn't JSON; use raw text
+    }
+    throw new Error(`Cerebras ${status}: ${detail.slice(0, 240)}`);
   }
 
   const reader = res.body!.getReader();
@@ -642,11 +665,10 @@ export async function* generateContentStream(
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('AbortError') || msg.includes('timeout')) {
-      throw new Error('Request timed out — Cerebras may be busy. Try again.');
+      throw new Error('Request timed out — try again.');
     }
-    if (msg.includes('429') || msg.includes('rate_limit')) {
-      throw new Error('Rate limit hit — wait a moment and try again.');
-    }
-    throw new Error(`Quinn error: ${msg.slice(0, 100)}`);
+    // Surface the actual upstream message — prior code masked everything as
+    // "Rate limit hit" which was misleading when the real cause was different.
+    throw new Error(msg.slice(0, 240));
   }
 }

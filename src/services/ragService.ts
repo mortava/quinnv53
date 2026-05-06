@@ -19,11 +19,12 @@ import type { KnowledgeDocument } from "../lib/knowledge_types";
 
 /**
  * Max chars of guideline text we'll inject per query.
- * Cerebras llama3.1-8b has 8k context; we cap injected guidelines at ~24k
- * chars (~6k tokens) leaving headroom for system prompt + chat history +
- * 1500 output tokens.
+ * Cerebras free tier is 60k TPM; tool schemas eat ~2k tokens and system+
+ * history+output adds ~3k more. Capping injected guidelines at ~18k chars
+ * (~4.5k tokens) keeps each turn around ~10k tokens — comfortably 5+ turns
+ * per minute with auto-retry on transient 429.
  */
-const MAX_CONTEXT_CHARS = 24_000;
+const MAX_CONTEXT_CHARS = 18_000;
 
 interface DocRoute {
   /** Document to load when this rule matches. */
