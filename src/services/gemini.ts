@@ -365,11 +365,26 @@ function sanitizeText(text: string): string {
     .replace(/\bDSCRloan\b/gi, 'DSCR loan')
     .replace(/\bMaxLTV\b/g, 'Max LTV')
     .replace(/\bRequiredDocs\b/g, 'Required Docs')
-    // Insert a space when a lowercase letter is immediately followed by an
-    // uppercase letter that starts a new word (camelCase streaming artifact).
-    // Skip well-known acronym/compound patterns like "FICO", "DSCR", "LTV",
-    // dollar amounts ($425k), and percentages.
+    // Insert spaces around the most common Cerebras streaming-merge patterns.
+    // (a) lowercase → uppercase-followed-by-lowercase (camelCase: "LTVMatrix" → "LTV Matrix")
     .replace(/([a-z])([A-Z][a-z]{2,})/g, '$1 $2')
+    // (b) lowercase → 2+ uppercase (acronym: "scoreLTV" → "score LTV")
+    .replace(/([a-z])([A-Z]{2,})/g, '$1 $2')
+    // (c) lowercase → digit (e.g. "at80%" → "at 80%")
+    .replace(/([a-z])(\d)/g, '$1 $2')
+    // (d) digit → 2+ uppercase (acronym: "740FICO" → "740 FICO")
+    .replace(/(\d)([A-Z]{2,})/g, '$1 $2')
+    // (e) lowercase → $ (e.g. "to$2.5M" → "to $2.5M")
+    .replace(/([a-z])\$/g, '$1 $')
+    // (f) Common short-word run-ons we've observed Cerebras producing
+    .replace(/\bFora\b/g, 'For a')
+    .replace(/\btorun\b/g, 'to run')
+    .replace(/\bisabove\b/g, 'is above')
+    .replace(/\bisabovethe\b/g, 'is above the')
+    .replace(/\bWantme\b/g, 'Want me')
+    .replace(/\btheDSCR\b/g, 'the DSCR')
+    .replace(/\btheLTV\b/g, 'the LTV')
+    .replace(/\btheFICO\b/g, 'the FICO')
     // Collapse runs of newlines and trim
     .replace(/\n{3,}/g, '\n\n')
     .trim();
