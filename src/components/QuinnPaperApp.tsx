@@ -19,7 +19,9 @@ import { generateContentStream } from '../services/gemini';
 import type { Message, GenerativeUIData, CitationSource } from '../types';
 import { GenerativeUI } from './GenerativeUI';
 import AdminPanel from './AdminPanel';
+import EncompassLoginModal from './EncompassLoginModal';
 import { getSessionId, logChatTurn, logSearch } from '../lib/supabase';
+import { clearEncompassSession, getEncompassSession, EncompassSession } from '../lib/encompassAuth';
 
 /* ---------- Responsive helper ---------- */
 const MOBILE_BREAKPOINT = 768;
@@ -648,6 +650,12 @@ function AttachmentPreview({ file }: { file: AttachedFile }) {
   };
 
   const sendToEncompass = async (): Promise<void> => {
+    const session = getEncompassSession();
+    if (!session) {
+      setPushState('error');
+      setPushMsg('Not signed in to Encompass. Click Login first.');
+      return;
+    }
     const loanNumber = window.prompt(
       'Encompass loan number to attach this document to:',
     );
@@ -663,6 +671,7 @@ function AttachmentPreview({ file }: { file: AttachedFile }) {
           name: file.name,
           mimeType: file.mimeType,
           data: file.data,
+          accessToken: session.accessToken,
         }),
       });
       const json = (await res.json()) as { ok: boolean; error?: string };
@@ -1684,10 +1693,19 @@ interface TopBarProps {
   onToggleSidebar: () => void;
   sidebarExpanded: boolean;
   onLoginClick: () => void;
+  /** When set, the user is signed in to Encompass. Login pill becomes a logout
+   *  pill that shows their email and signs them out on click. */
+  signedInEmail?: string | null;
   isMobile?: boolean;
 }
 
-function TopBar({ onToggleSidebar, sidebarExpanded, onLoginClick, isMobile = false }: TopBarProps) {
+function TopBar({
+  onToggleSidebar,
+  sidebarExpanded,
+  onLoginClick,
+  signedInEmail,
+  isMobile = false,
+}: TopBarProps) {
   return (
     <div
       style={{
@@ -1755,8 +1773,19 @@ function TopBar({ onToggleSidebar, sidebarExpanded, onLoginClick, isMobile = fal
           </div>
         )}
       </div>
-      <PillButton variant="primary" size="sm" onClick={onLoginClick}>
-        Login
+      <PillButton
+        variant={signedInEmail ? 'secondary' : 'primary'}
+        size="sm"
+        onClick={onLoginClick}
+        title={signedInEmail ? `Signed in as ${signedInEmail} — click to sign out` : 'Sign in to Encompass'}
+      >
+        {signedInEmail
+          ? isMobile
+            ? 'Sign out'
+            : signedInEmail.length > 22
+              ? signedInEmail.slice(0, 20) + '…'
+              : signedInEmail
+          : 'Login'}
       </PillButton>
     </div>
   );
@@ -1956,6 +1985,10 @@ export default function QuinnPaperApp() {
     if (typeof window === 'undefined') return false;
     return window.location.hash === '#/admin';
   });
+  const [loginOpen, setLoginOpen] = useState<boolean>(false);
+  const [encompassSession, setEncompassSession] = useState<EncompassSession | null>(() =>
+    getEncompassSession(),
+  );
   const scrollerRef = useRef<HTMLDivElement>(null);
   const lastIdx = messages.length - 1;
   const lastIsAssistant = messages[lastIdx]?.role === 'model';
@@ -1992,8 +2025,18 @@ export default function QuinnPaperApp() {
   };
 
   const handleLoginClick = (): void => {
-    window.location.hash = '#/admin';
-    setAdminOpen(true);
+    if (encompassSession) {
+      // Already signed in → click acts as Sign Out
+      clearEncompassSession();
+      setEncompassSession(null);
+      return;
+    }
+    setLoginOpen(true);
+  };
+
+  const handleLoginSuccess = (session: EncompassSession): void => {
+    setEncompassSession(session);
+    setLoginOpen(false);
   };
 
   const handleAdminClose = (): void => {
@@ -2116,6 +2159,7 @@ export default function QuinnPaperApp() {
             onToggleSidebar={toggleSidebar}
             sidebarExpanded={!isMobile && sidebarExpanded}
             onLoginClick={handleLoginClick}
+            signedInEmail={encompassSession?.email || null}
             isMobile={isMobile}
           />
           <div
@@ -2182,6 +2226,12 @@ export default function QuinnPaperApp() {
         </div>
       </div>
       {adminOpen && <AdminPanel onClose={handleAdminClose} />}
+      {loginOpen && (
+        <EncompassLoginModal
+          onClose={() => setLoginOpen(false)}
+          onSuccess={handleLoginSuccess}
+        />
+      )}
     </>
   );
 }

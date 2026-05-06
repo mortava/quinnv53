@@ -118,12 +118,24 @@ export interface AgentResult {
   error?: string;
 }
 
+import { getEncompassSession } from '../lib/encompassAuth';
+
 export async function callTool(dispatch: AgentDispatch): Promise<AgentResult> {
   try {
+    // For Encompass tools, include the user's access token from sessionStorage
+    // so the lookup runs as the signed-in LO (not the static admin).
+    const body: Record<string, unknown> = {
+      tool: dispatch.tool,
+      args: dispatch.args,
+    };
+    if (dispatch.tool === 'encompass-deal') {
+      const session = getEncompassSession();
+      if (session) body.accessToken = session.accessToken;
+    }
     const res = await fetch('/api/agent/call', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tool: dispatch.tool, args: dispatch.args }),
+      body: JSON.stringify(body),
     });
     const json = (await res.json()) as AgentResult;
     return json;

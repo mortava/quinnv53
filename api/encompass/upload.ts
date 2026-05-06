@@ -25,6 +25,10 @@ interface UploadBody {
   name: string;
   mimeType: string;
   data: string;
+  /** User's access token from /api/encompass/login. Required unless useAdminCreds is true. */
+  accessToken?: string;
+  /** Admin override — set only from the admin panel. */
+  useAdminCreds?: boolean;
 }
 
 interface EncompassEnv {
@@ -170,20 +174,36 @@ export default async function handler(req: Request): Promise<Response> {
     );
   }
 
-  const env = readEnv();
-  if (!env) {
-    return Response.json(
-      {
-        ok: false,
-        error:
-          'Encompass credentials not configured. Set ENCOMPASS_CLIENT_ID, ENCOMPASS_CLIENT_SECRET, ENCOMPASS_INSTANCE_ID, ENCOMPASS_USER, ENCOMPASS_PASS in Vercel env to enable.',
-      },
-      { status: 503 },
-    );
-  }
-
+  // Resolve the OAuth token. Prefer the user's accessToken (from /api/encompass/login).
+  // Fall back to admin creds only when useAdminCreds is true.
+  let token: string;
   try {
-    const token = await getAccessToken(env);
+    if (body.accessToken) {
+      token = body.accessToken;
+    } else if (body.useAdminCreds) {
+      const env = readEnv();
+      if (!env) {
+        return Response.json(
+          {
+            ok: false,
+            error:
+              'Admin Encompass credentials not configured. Set ENCOMPASS_CLIENT_ID, ENCOMPASS_CLIENT_SECRET, ENCOMPASS_INSTANCE_ID, ENCOMPASS_USER, ENCOMPASS_PASS in Vercel env to enable.',
+          },
+          { status: 503 },
+        );
+      }
+      token = await getAccessToken(env);
+    } else {
+      return Response.json(
+        {
+          ok: false,
+          error:
+            'Not signed in to Encompass. Click Login and enter your Encompass email + password to push documents.',
+        },
+        { status: 401 },
+      );
+    }
+
     const loanGuid = await findLoanGuid(token, body.loanNumber);
     const attachmentId = await uploadAttachment(token, loanGuid, body);
     return Response.json({ ok: true, attachmentId, loanGuid });

@@ -19,6 +19,12 @@ export const config = { runtime: 'edge' };
 interface CallBody {
   tool: string;
   args: Record<string, unknown>;
+  /** User's Encompass access token (from /api/encompass/login). Required for
+   *  encompass-* tools unless useAdminCreds is true. */
+  accessToken?: string;
+  /** Admin override — falls back to the static ENCOMPASS_USER / ENCOMPASS_PASS
+   *  (Jbeach). Only set this from the admin panel. */
+  useAdminCreds?: boolean;
 }
 
 interface ToolResult {
@@ -48,62 +54,85 @@ function missingCreds(name: string): Response {
 
 /* ---------- Tool: encompass-deal ---------- */
 
-interface EncompassEnv {
-  base: string;
-  clientId: string;
-  clientSecret: string;
-  instanceId: string;
-  user: string;
-  pass: string;
-}
-
-function readEncompassEnv(): EncompassEnv | null {
+/**
+ * Resolve an Encompass access token for the request.
+ * - If the body carried a user `accessToken`, use it.
+ * - Else if `useAdminCreds` was true, fall back to the static admin user/pass.
+ * - Else return null → caller responds with "please log in".
+ */
+async function resolveEncompassToken(
+  body: CallBody,
+): Promise<{ token: string; base: string } | { error: string; status: number }> {
   const base = process.env.ENCOMPASS_API_BASE_URL || 'https://api.elliemae.com';
-  const clientId = process.env.ENCOMPASS_CLIENT_ID;
-  const clientSecret = process.env.ENCOMPASS_CLIENT_SECRET;
-  const instanceId = process.env.ENCOMPASS_INSTANCE_ID;
-  const user = process.env.ENCOMPASS_USER;
-  const pass = process.env.ENCOMPASS_PASS;
-  if (!clientId || !clientSecret || !instanceId || !user || !pass) return null;
-  return { base, clientId, clientSecret, instanceId, user, pass };
+
+  if (body.accessToken) {
+    return { token: body.accessToken, base };
+  }
+
+  if (body.useAdminCreds) {
+    const clientId = process.env.ENCOMPASS_CLIENT_ID;
+    const clientSecret = process.env.ENCOMPASS_CLIENT_SECRET;
+    const instanceId = process.env.ENCOMPASS_INSTANCE_ID;
+    const user = process.env.ENCOMPASS_USER;
+    const pass = process.env.ENCOMPASS_PASS;
+    if (!clientId || !clientSecret || !instanceId || !user || !pass) {
+      return { error: 'Admin Encompass credentials not configured.', status: 503 };
+    }
+    const tokenBody = new URLSearchParams({
+      grant_type: 'password',
+      username: `${user}@encompass:${instanceId}`,
+      password: pass,
+      client_id: clientId,
+      client_secret: clientSecret,
+      scope: 'lp',
+    });
+    const res = await fetch(`${base}/oauth2/v1/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: tokenBody,
+    });
+    if (!res.ok) {
+      return {
+        error: `Admin Encompass auth ${res.status}: ${(await res.text()).slice(0, 160)}`,
+        status: 502,
+      };
+    }
+    const json = (await res.json()) as { access_token?: string };
+    if (!json.access_token) {
+      return { error: 'Admin Encompass auth: no access_token', status: 502 };
+    }
+    return { token: json.access_token, base };
+  }
+
+  return {
+    error:
+      'Not signed in to Encompass. Click Login and enter your Encompass email + password to view your pipeline.',
+    status: 401,
+  };
 }
 
-async function getEncompassToken(env: EncompassEnv): Promise<string> {
-  const body = new URLSearchParams({
-    grant_type: 'password',
-    username: `${env.user}@encompass:${env.instanceId}`,
-    password: env.pass,
-    client_id: env.clientId,
-    client_secret: env.clientSecret,
-    scope: 'lp',
-  });
-  const res = await fetch(`${env.base}/oauth2/v1/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!res.ok) throw new Error(`Encompass auth ${res.status}: ${(await res.text()).slice(0, 160)}`);
-  const json = (await res.json()) as { access_token?: string };
-  if (!json.access_token) throw new Error('Encompass auth: no access_token');
-  return json.access_token;
-}
-
-async function toolEncompassDeal(args: Record<string, unknown>): Promise<Response> {
-  const env = readEncompassEnv();
-  if (!env) return missingCreds('Encompass');
+async function toolEncompassDeal(
+  args: Record<string, unknown>,
+  body: CallBody,
+): Promise<Response> {
   const loanNumber = String(args.loanNumber || args.loan_number || '').trim();
   const borrowerLastName = String(args.borrowerLastName || args.lastName || '').trim();
   if (!loanNumber && !borrowerLastName) {
     return jsonResponse(400, { ok: false, error: 'Provide loanNumber or borrowerLastName' });
   }
+
+  const auth = await resolveEncompassToken(body);
+  if ('error' in auth) {
+    return jsonResponse(auth.status, { ok: false, error: auth.error });
+  }
+
   try {
-    const token = await getEncompassToken(env);
     const filter: Record<string, unknown> = loanNumber
       ? { canonicalName: 'Loan.LoanNumber', value: loanNumber, matchType: 'exact' }
       : { canonicalName: 'Loan.BorrowerLastName', value: borrowerLastName, matchType: 'startsWith' };
-    const res = await fetch(`${env.base}/encompass/v3/loanPipeline?limit=5`, {
+    const res = await fetch(`${auth.base}/encompass/v3/loanPipeline?limit=5`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${auth.token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         filter: { terms: [filter] },
         fields: [
@@ -120,7 +149,17 @@ async function toolEncompassDeal(args: Record<string, unknown>): Promise<Respons
         ],
       }),
     });
-    if (!res.ok) throw new Error(`Encompass pipeline ${res.status}`);
+    if (!res.ok) {
+      const text = await res.text();
+      // 401 from Encompass means the user's token expired
+      if (res.status === 401) {
+        return jsonResponse(401, {
+          ok: false,
+          error: 'Your Encompass session expired. Please log in again.',
+        });
+      }
+      throw new Error(`Encompass pipeline ${res.status}: ${text.slice(0, 160)}`);
+    }
     const data = await res.json();
     return jsonResponse(200, { ok: true, data });
   } catch (err) {
@@ -214,12 +253,18 @@ async function toolStewartFee(args: Record<string, unknown>): Promise<Response> 
 
 /* ---------- Dispatcher ---------- */
 
-const TOOLS: Record<string, (args: Record<string, unknown>) => Promise<Response>> = {
+/**
+ * Tool handlers. Each receives the raw args plus the full body so it can read
+ * accessToken / useAdminCreds when needed.
+ */
+type ToolHandler = (args: Record<string, unknown>, body: CallBody) => Promise<Response>;
+
+const TOOLS: Record<string, ToolHandler> = {
   'encompass-deal': toolEncompassDeal,
-  'fub-notes': toolFubNotes,
-  airdna: toolAirdna,
-  steadily: toolSteadily,
-  'stewart-fee': toolStewartFee,
+  'fub-notes': (args) => toolFubNotes(args),
+  airdna: (args) => toolAirdna(args),
+  steadily: (args) => toolSteadily(args),
+  'stewart-fee': (args) => toolStewartFee(args),
 };
 
 export default async function handler(req: Request): Promise<Response> {
@@ -250,5 +295,5 @@ export default async function handler(req: Request): Promise<Response> {
       error: `Unknown tool '${body.tool}'. Available: ${Object.keys(TOOLS).join(', ')}`,
     });
   }
-  return handler(body.args || {});
+  return handler(body.args || {}, body);
 }
