@@ -17,8 +17,13 @@ import {
 } from "../lib/knowledge_base";
 import type { KnowledgeDocument } from "../lib/knowledge_types";
 
-/** Max chars of guideline text we'll inject per query — keeps prompt under ~25k tokens. */
-const MAX_CONTEXT_CHARS = 90_000;
+/**
+ * Max chars of guideline text we'll inject per query.
+ * Groq llama-3.1-8b-instant free tier is ~6k TPM — we cap input context at
+ * ~8k chars (~2k tokens) so a single turn (sys + ctx + query + 1500 output)
+ * stays well under the per-minute budget.
+ */
+const MAX_CONTEXT_CHARS = 8_000;
 
 interface DocRoute {
   /** Document to load when this rule matches. */
