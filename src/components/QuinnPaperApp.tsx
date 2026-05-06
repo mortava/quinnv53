@@ -20,6 +20,7 @@ import type { Message, GenerativeUIData, CitationSource } from '../types';
 import { GenerativeUI } from './GenerativeUI';
 import AdminPanel from './AdminPanel';
 import EncompassLoginModal from './EncompassLoginModal';
+import PricerPanel from './PricerPanel';
 import { getSessionId, logChatTurn, logSearch } from '../lib/supabase';
 import { clearEncompassSession, getEncompassSession, EncompassSession } from '../lib/encompassAuth';
 
@@ -1426,13 +1427,12 @@ interface SidebarNavItem {
   label: string;
   prompt?: string;
   href?: string;
+  /** Special panel routes that open in-app instead of redirecting */
+  panel?: 'pricer';
 }
 
-const TQL_PRICER_URL =
-  (process.env.VITE_TQL_PRICER_URL as string) || 'https://submit.tqltpo.com';
-
 const NAV_ITEMS: SidebarNavItem[] = [
-  { icon: 'calc', label: 'Price a Loan', href: TQL_PRICER_URL },
+  { icon: 'calc', label: 'Price a Loan', panel: 'pricer' },
   { icon: 'database', label: 'My Loans', prompt: "Show me my loan pipeline." },
   { icon: 'fileText', label: 'Build Quote', prompt: "Help me build a quote." },
   { icon: 'book', label: 'Docs' },
@@ -1443,9 +1443,10 @@ interface SidebarProps {
   onNew: () => void;
   expanded: boolean;
   onAction?: (prompt: string) => void;
+  onPanel?: (panel: 'pricer') => void;
 }
 
-function Sidebar({ onNew, expanded, onAction }: SidebarProps) {
+function Sidebar({ onNew, expanded, onAction, onPanel }: SidebarProps) {
   return (
     <aside
       style={{
@@ -1592,7 +1593,8 @@ function Sidebar({ onNew, expanded, onAction }: SidebarProps) {
             title={item.label}
             aria-label={item.label}
             onClick={() => {
-              if (item.href) window.open(item.href, '_blank', 'noopener,noreferrer');
+              if (item.panel) onPanel?.(item.panel);
+              else if (item.href) window.open(item.href, '_blank', 'noopener,noreferrer');
               else if (item.prompt) onAction?.(item.prompt);
             }}
             onMouseEnter={(e) => (e.currentTarget.style.background = T.surfaceSoft)}
@@ -1990,6 +1992,7 @@ export default function QuinnPaperApp() {
     return window.location.hash === '#/admin';
   });
   const [loginOpen, setLoginOpen] = useState<boolean>(false);
+  const [pricerOpen, setPricerOpen] = useState<boolean>(false);
   const [encompassSession, setEncompassSession] = useState<EncompassSession | null>(() =>
     getEncompassSession(),
   );
@@ -2052,6 +2055,11 @@ export default function QuinnPaperApp() {
 
   const handleSidebarAction = (prompt: string): void => {
     void send(prompt);
+    if (isMobile) closeSidebar();
+  };
+
+  const handleSidebarPanel = (panel: 'pricer'): void => {
+    if (panel === 'pricer') setPricerOpen(true);
     if (isMobile) closeSidebar();
   };
 
@@ -2130,6 +2138,7 @@ export default function QuinnPaperApp() {
             onNew={reset}
             expanded={isMobile ? true : sidebarExpanded}
             onAction={handleSidebarAction}
+            onPanel={handleSidebarPanel}
           />
         </div>
 
@@ -2236,6 +2245,7 @@ export default function QuinnPaperApp() {
           onSuccess={handleLoginSuccess}
         />
       )}
+      {pricerOpen && <PricerPanel onClose={() => setPricerOpen(false)} />}
     </>
   );
 }
