@@ -15,7 +15,7 @@ import React, {
   useCallback,
 } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { generateContentStream } from '../services/gemini';
+import { generateContentStream, finalizeText } from '../services/gemini';
 import type { Message, GenerativeUIData, CitationSource } from '../types';
 import { GenerativeUI } from './GenerativeUI';
 import AdminPanel from './AdminPanel';
@@ -1921,13 +1921,17 @@ function useQuinnConversation() {
           }
         }
 
+        // Apply heavy run-on-word repair on the final accumulated reply
+        // (per-chunk sanitizer keeps leading spaces intact during streaming)
+        const finalContent = acc ? finalizeText(acc) : '';
+
         // Mark all tool steps done
         setMessages((prev) => {
           const c = [...prev];
           const last = c[c.length - 1];
           c[c.length - 1] = {
             ...last,
-            content: acc || last.content,
+            content: finalContent || last.content,
             tools: (last.tools || []).map((t) => ({ ...t, status: 'done' })),
             generativeUI: gen,
           };
@@ -1935,8 +1939,8 @@ function useQuinnConversation() {
         });
 
         // Log the assistant reply
-        if (acc) {
-          void logChatTurn({ session_id: sessionId, role: 'assistant', content: acc });
+        if (finalContent) {
+          void logChatTurn({ session_id: sessionId, role: 'assistant', content: finalContent });
         }
       } catch (err: unknown) {
         const message =

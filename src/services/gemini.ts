@@ -335,38 +335,65 @@ function mapToGenerativeUI(name: string, rawArgs: unknown, sourceRef?: SourceRef
 
 // ─── Text sanitizer — strips any leaked scaffold labels ───────────────────────
 
+/**
+ * Light-weight per-chunk cleaner. Strips markdown symbols inline but PRESERVES
+ * leading/trailing whitespace inside each streamed chunk — Cerebras encodes
+ * word boundaries as a leading space on the next token (e.g. " can"), and any
+ * .trim() here would collapse that into "Youcan".
+ *
+ * Heavy run-on-word repair lives in finalizeText() and only runs once on the
+ * accumulated reply (after the stream finishes) so it can match across the
+ * full word.
+ */
 function sanitizeText(text: string): string {
-  // Strip every markdown symbol the user explicitly forbade in the UI (asterisks,
-  // pounds, pipes, dash separators) and aggressively repair the run-on/merged
-  // word patterns Cerebras occasionally produces ("borrowercontribution" →
-  // "borrower contribution", "loanupto" → "loan up to", etc.).
   return text
-    // Drop legacy scaffold labels (kept from earlier system prompt)
+    // Strip bold/italic asterisks (keep the word)
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1$2')
+    // Strip leading heading hashes (markdown #)
+    .replace(/^#{1,4}\s+/gm, '')
+    // Strip raw markdown table delimiters and the alignment row
+    .replace(/^\s*\|?\s*:?-{2,}\s*\|.*$/gm, '')
+    .replace(/\|/g, ' ')
+    // Strip stray standalone hashes
+    .replace(/(^|\s)#{1,4}(\s|$)/g, '$1$2');
+  // NO .trim() — would erase the leading space Cerebras uses to separate tokens.
+}
+
+/**
+ * Final cleanup applied once to the full assistant reply after the stream
+ * completes. Safe to do dictionary repair + cross-word regex here.
+ */
+export function finalizeText(text: string): string {
+  return text
+    // Legacy scaffold labels (kept from earlier system prompt)
     .replace(/✅\s*\*\*What Works:\*\*\s*/g, '')
     .replace(/❌\s*\*\*Watch Out:\*\*\s*/g, '')
     .replace(/\*\*→\s*Next:\*\*\s*/g, '')
     .replace(/\*Source:[^*\n]*\*/g, '')
     .replace(/Source:\s*\[[^\]]*\][^\n]*/g, '')
-    // Strip bold/italic asterisks but keep the word inside
-    .replace(/\*\*([^*]+)\*\*/g, '$1')
-    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1$2')
-    // Strip leading heading hashes
-    .replace(/^#{1,4}\s+/gm, '')
-    // Strip raw markdown table delimiters and the alignment row
-    .replace(/^\s*\|?\s*:?-{2,}\s*\|.*$/gm, '')
-    .replace(/\|/g, ' ')
-    // Strip dash-only separator lines
-    .replace(/^\s*-{2,}\s*$/gm, '')
-    // Strip stray standalone hashes
-    .replace(/(^|\s)#{1,4}(\s|$)/g, '$1$2')
-    // Collapse whitespace, repair common merged-word patterns from Cerebras
+    // Repair common run-on words observed in Cerebras output
     .replace(/\bborrowercontribution\b/gi, 'borrower contribution')
     .replace(/\brefiallowed\b/gi, 'refi allowed')
     .replace(/\bloanupto\b/gi, 'loan up to')
     .replace(/\bDSCRloan\b/gi, 'DSCR loan')
     .replace(/\bMaxLTV\b/g, 'Max LTV')
     .replace(/\bRequiredDocs\b/g, 'Required Docs')
-    // Insert spaces around the most common Cerebras streaming-merge patterns.
+    .replace(/\bFora\b/g, 'For a')
+    .replace(/\btorun\b/g, 'to run')
+    .replace(/\btocheck\b/g, 'to check')
+    .replace(/\bisabove\b/g, 'is above')
+    .replace(/\bisabovethe\b/g, 'is above the')
+    .replace(/\bWantme\b/g, 'Want me')
+    .replace(/\btheDSCR\b/g, 'the DSCR')
+    .replace(/\btheLTV\b/g, 'the LTV')
+    .replace(/\btheFICO\b/g, 'the FICO')
+    .replace(/\bYoucan\b/g, 'You can')
+    .replace(/\bthereis\b/g, 'there is')
+    .replace(/\bforPurchase\b/g, 'for Purchase')
+    .replace(/\bforRate\b/g, 'for Rate')
+    .replace(/\bforCash\b/g, 'for Cash')
+    // Cross-word streaming-merge patterns
     // (a) lowercase → uppercase-followed-by-lowercase (camelCase: "LTVMatrix" → "LTV Matrix")
     .replace(/([a-z])([A-Z][a-z]{2,})/g, '$1 $2')
     // (b) lowercase → 2+ uppercase (acronym: "scoreLTV" → "score LTV")
@@ -375,18 +402,11 @@ function sanitizeText(text: string): string {
     .replace(/([a-z])(\d)/g, '$1 $2')
     // (d) digit → 2+ uppercase (acronym: "740FICO" → "740 FICO")
     .replace(/(\d)([A-Z]{2,})/g, '$1 $2')
-    // (e) lowercase → $ (e.g. "to$2.5M" → "to $2.5M")
+    // (e) digit → 3+ lowercase (e.g. "70percent" → "70 percent")
+    .replace(/(\d)([a-z]{3,})/g, '$1 $2')
+    // (f) lowercase → $ (e.g. "to$2.5M" → "to $2.5M")
     .replace(/([a-z])\$/g, '$1 $')
-    // (f) Common short-word run-ons we've observed Cerebras producing
-    .replace(/\bFora\b/g, 'For a')
-    .replace(/\btorun\b/g, 'to run')
-    .replace(/\bisabove\b/g, 'is above')
-    .replace(/\bisabovethe\b/g, 'is above the')
-    .replace(/\bWantme\b/g, 'Want me')
-    .replace(/\btheDSCR\b/g, 'the DSCR')
-    .replace(/\btheLTV\b/g, 'the LTV')
-    .replace(/\btheFICO\b/g, 'the FICO')
-    // Collapse runs of newlines and trim
+    // Collapse 3+ newlines, trim final whitespace
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
