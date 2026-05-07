@@ -14,7 +14,8 @@ export type AgentToolName =
   | 'airdna'
   | 'fub-notes'
   | 'steadily'
-  | 'stewart-fee';
+  | 'stewart-fee'
+  | 'rentcast-property';
 
 export interface AgentDispatch {
   tool: AgentToolName;
@@ -67,6 +68,30 @@ export function classifyIntent(query: string): AgentDispatch | null {
     }
   }
 
+  /* RentCast property/value/long-term-rent lookup —
+     "what's [address] worth", "rent estimate for [address]",
+     "property data on [address]", "comps near [address]",
+     or any address-shaped query that isn't STR-specific. */
+  const looksLikeAddress =
+    /\b\d{1,5}\s+\w+/.test(query) || // "123 Main"
+    /\b\d{5}\b/.test(query) || // ZIP
+    /,\s*[A-Z]{2}\b/.test(query); // ", CA"
+  const propertyIntent =
+    /\b(property\s*(?:data|info|details|value|valuation)|rent\s*(?:estimate|comps?|amount)|long[-\s]?term\s*rental|ltr|home\s*value|what(?:'s|s|\s+is)\s+(?:the\s+)?(?:value|worth|rent)|comps?\s+(?:near|for|on|in)|lookup|look\s+up)\b/.test(
+      q,
+    );
+  if ((propertyIntent || looksLikeAddress) && !/\bdeal|loan|borrower|pipeline|encompass\b/.test(q)) {
+    const addr = extractAddress(query) || extractRawAddress(query);
+    if (addr) {
+      return {
+        tool: 'rentcast-property',
+        args: { address: addr },
+        label: 'Pulling RentCast property data',
+        detail: addr,
+      };
+    }
+  }
+
   /* Steadily landlord insurance quote — "insurance quote for [address]" */
   if (/\b(insurance|steadily|landlord\s*policy|rental\s*policy|hoi)\b/.test(q)) {
     const addr = extractAddress(query);
@@ -106,8 +131,24 @@ export function classifyIntent(query: string): AgentDispatch | null {
 
 function extractAddress(query: string): string {
   // crude: capture everything after "for" / "at" up to end of sentence
-  const m = query.match(/\b(?:for|at|@)\s+(.{6,80}?)(?:[?.!]|$)/i);
+  const m = query.match(/\b(?:for|at|@|on|near)\s+(.{6,100}?)(?:[?.!]|$)/i);
   return m ? m[1].trim() : '';
+}
+
+/**
+ * Best-effort raw address extractor — finds a "<number> <street>...[, ST] [ZIP]"
+ * substring without needing a preposition. Used by the RentCast classifier
+ * when the user pastes an address directly without "for"/"at"/"near".
+ */
+function extractRawAddress(query: string): string {
+  // street-number + at least one word, optional ", State", optional ZIP
+  const m = query.match(
+    /\b\d{1,5}\s+[\w\s\-.]+?(?:,\s*[A-Za-z\s]+){0,2}(?:,\s*[A-Z]{2})?(?:\s+\d{5})?/,
+  );
+  if (m) return m[0].trim().replace(/[?.!]+$/, '');
+  // Fallback: pull a 5-digit ZIP if it's the only signal we have
+  const zip = query.match(/\b\d{5}\b/);
+  return zip ? zip[0] : '';
 }
 
 /* ---------- Dispatcher ---------- */

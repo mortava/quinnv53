@@ -232,6 +232,50 @@ async function toolSteadily(args: Record<string, unknown>): Promise<Response> {
   });
 }
 
+/* ---------- Tool: rentcast-property ---------- */
+/**
+ * Looks up RentCast property data for an address. Pulls the three core
+ * endpoints in parallel and returns a combined block:
+ *   - /properties        (basics: type, beds/baths, sqft, year built, owner)
+ *   - /avm/value         (current valuation + comps)
+ *   - /avm/rent/long-term (LTR rent estimate + comps)
+ *
+ * Auth: X-Api-Key header. Free tier rate-limit: 50 requests/month/endpoint
+ * (per RentCast docs); we do 3 per call so plan budget accordingly.
+ */
+async function toolRentcastProperty(args: Record<string, unknown>): Promise<Response> {
+  const apiKey = process.env.RENTCAST_API_KEY;
+  if (!apiKey) return missingCreds('RentCast');
+  const address = String(args.address || '').trim();
+  if (!address) {
+    return jsonResponse(400, { ok: false, error: 'Provide an address' });
+  }
+  const enc = encodeURIComponent(address);
+  const headers = { 'X-Api-Key': apiKey, Accept: 'application/json' };
+  const base = 'https://api.rentcast.io/v1';
+
+  const fetchSafe = async (url: string): Promise<unknown> => {
+    try {
+      const r = await fetch(url, { headers });
+      if (!r.ok) return { error: `${r.status}: ${(await r.text()).slice(0, 120)}` };
+      return await r.json();
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
+  const [property, value, rent] = await Promise.all([
+    fetchSafe(`${base}/properties?address=${enc}`),
+    fetchSafe(`${base}/avm/value?address=${enc}&compCount=5`),
+    fetchSafe(`${base}/avm/rent/long-term?address=${enc}&compCount=5`),
+  ]);
+
+  return jsonResponse(200, {
+    ok: true,
+    data: { address, property, value, rent },
+  });
+}
+
 /* ---------- Tool: stewart-fee (title fee estimate) ---------- */
 
 async function toolStewartFee(args: Record<string, unknown>): Promise<Response> {
@@ -265,6 +309,7 @@ const TOOLS: Record<string, ToolHandler> = {
   airdna: (args) => toolAirdna(args),
   steadily: (args) => toolSteadily(args),
   'stewart-fee': (args) => toolStewartFee(args),
+  'rentcast-property': (args) => toolRentcastProperty(args),
 };
 
 export default async function handler(req: Request): Promise<Response> {
